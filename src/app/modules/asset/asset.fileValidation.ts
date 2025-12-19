@@ -14,7 +14,7 @@ const IMAGE_RULES = {
 };
 
 const VIDEO_RULES = {
-  minBytes: 30 * MB,
+  minBytes: 2 * MB,
   maxBytes: 500 * MB,
   minDuration: 5, // seconds
   maxDuration: 300, // 5 minutes
