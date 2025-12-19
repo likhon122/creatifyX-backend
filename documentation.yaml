@@ -1,0 +1,1573 @@
+openapi: 3.0.3
+info:
+  title: CreatifyX Backend API
+  description: >
+    REST interface for authentication, user management, plans, categories, assets,
+    subscriptions, and Stripe webhooks powering the CreatifyX platform.
+  version: 1.0.0
+servers:
+  - url: https://api.creatifyx.ai/api/v1
+    description: Production
+  - url: http://localhost:5000/api/v1
+    description: Local development
+tags:
+  - name: Auth
+    description: Authentication, password, and OTP flows.
+  - name: Users
+    description: User profiles and administration.
+  - name: Plans
+    description: Subscription plans configuration.
+  - name: Categories
+    description: Asset taxonomy and filters.
+  - name: Assets
+    description: Digital asset ingestion and catalog endpoints.
+  - name: Subscriptions
+    description: Stripe-powered subscription lifecycle.
+  - name: Stripe
+    description: Incoming Stripe webhook processing.
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    BaseSuccess:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: Operation completed successfully.
+    PaginationMeta:
+      type: object
+      properties:
+        total:
+          type: integer
+          example: 120
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 20
+        totalPages:
+          type: integer
+          example: 6
+        hasMore:
+          type: boolean
+          example: true
+    ErrorSource:
+      type: object
+      properties:
+        path:
+          type: string
+          example: body.email
+        message:
+          type: string
+          example: Invalid email address
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+        errorSources:
+          type: array
+          items:
+            $ref: '#/components/schemas/ErrorSource'
+        stack:
+          type: string
+          nullable: true
+    UserPublic:
+      type: object
+      properties:
+        _id:
+          type: string
+          format: objectId
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [subscriber, author, admin, super_admin]
+        profileImage:
+          type: string
+          format: uri
+          nullable: true
+        bio:
+          type: string
+          nullable: true
+        organization:
+          type: string
+          nullable: true
+        orgRole:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [active, inactive, blocked]
+        authorVerificationStatus:
+          type: string
+          enum: [pending, active, suspended, not_started]
+        isPremium:
+          type: boolean
+    UserUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        bio:
+          type: string
+    SignupRequest:
+      type: object
+      required: [name, email, password]
+      properties:
+        name:
+          type: string
+          minLength: 3
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 6
+          maxLength: 32
+    RegisterUserRequest:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 6
+          maxLength: 32
+    OtpVerificationRequest:
+      type: object
+      required: [email, otp]
+      properties:
+        email:
+          type: string
+          format: email
+        otp:
+          type: integer
+          example: 123456
+    ChangePasswordRequest:
+      type: object
+      required: [oldPassword, newPassword]
+      properties:
+        oldPassword:
+          type: string
+          minLength: 6
+        newPassword:
+          type: string
+          minLength: 6
+    ForgotPasswordRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+    ResetPasswordRequest:
+      type: object
+      required: [email, token, newPassword]
+      properties:
+        email:
+          type: string
+          format: email
+        token:
+          type: string
+        newPassword:
+          type: string
+          minLength: 6
+    AuthTokens:
+      type: object
+      properties:
+        userInfo:
+          $ref: '#/components/schemas/UserPublic'
+        accessToken:
+          type: string
+    OtpChallenge:
+      type: object
+      properties:
+        otp:
+          type: integer
+          description: Present only when OTP verification is required.
+    AccessTokenEnvelope:
+      type: object
+      properties:
+        accessToken:
+          type: string
+    FilterOption:
+      type: object
+      properties:
+        displayName:
+          type: string
+        value:
+          type: string
+    AvailableFilter:
+      type: object
+      properties:
+        filterKey:
+          type: string
+        displayName:
+          type: string
+        options:
+          type: array
+          items:
+            $ref: '#/components/schemas/FilterOption'
+    Category:
+      type: object
+      properties:
+        _id:
+          type: string
+        name:
+          type: string
+        slug:
+          type: string
+        parentCategory:
+          type: string
+          nullable: true
+        categoryType:
+          type: string
+          enum: [sub_category, main_category]
+        availableFilters:
+          type: array
+          items:
+            $ref: '#/components/schemas/AvailableFilter'
+    CategoryCreateRequest:
+      type: object
+      required: [name, availableFilters]
+      properties:
+        name:
+          type: string
+          minLength: 3
+          maxLength: 50
+        parentCategory:
+          type: string
+          nullable: true
+        availableFilters:
+          type: array
+          items:
+            $ref: '#/components/schemas/AvailableFilter'
+    CategoryUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        parentCategory:
+          type: string
+        availableFilters:
+          type: array
+          items:
+            $ref: '#/components/schemas/AvailableFilter'
+    Plan:
+      type: object
+      properties:
+        _id:
+          type: string
+        name:
+          type: string
+        slug:
+          type: string
+        type:
+          type: string
+          enum: [individual, team, enterprise]
+        billingCycle:
+          type: string
+          enum: [monthly, yearly]
+        price:
+          type: number
+        currency:
+          type: string
+          enum: [USD, BDT]
+        stripePriceId:
+          type: string
+          nullable: true
+        features:
+          type: array
+          items:
+            type: string
+        isActive:
+          type: boolean
+    PlanCreateRequest:
+      type: object
+      required: [name, type, billingCycle, price, currency]
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [individual, team, enterprise]
+        billingCycle:
+          type: string
+          enum: [monthly, yearly]
+        price:
+          type: number
+          minimum: 0
+        currency:
+          type: string
+          enum: [USD, BDT]
+        features:
+          type: array
+          items:
+            type: string
+    PlanUpdateRequest:
+      allOf:
+        - $ref: '#/components/schemas/PlanCreateRequest'
+      properties:
+        isActive:
+          type: boolean
+    Asset:
+      type: object
+      properties:
+        _id:
+          type: string
+        title:
+          type: string
+        slug:
+          type: string
+        author:
+          type: string
+        status:
+          type: string
+          enum: [pending_review, approved, rejected]
+        assetType:
+          type: string
+          enum: [image, video, web, presentation, graphic_template]
+        categories:
+          type: array
+          items:
+            type: string
+        tags:
+          type: array
+          items:
+            type: string
+        compatibleTools:
+          type: array
+          items:
+            type: string
+        resolution:
+          type: string
+        orientation:
+          type: string
+          enum: [horizontal, vertical, square]
+        stats:
+          type: object
+          properties:
+            downloads:
+              type: integer
+            views:
+              type: integer
+            likes:
+              type: integer
+        isPremium:
+          type: boolean
+        isAIGenerated:
+          type: boolean
+        metadata:
+          type: object
+    AssetCreatePayload:
+      type: object
+      required: [title, assetType, categories, tags]
+      properties:
+        title:
+          type: string
+        slug:
+          type: string
+          pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+        assetType:
+          type: string
+          enum: [image, video, web, presentation, graphic_template]
+        categories:
+          type: array
+          items:
+            type: string
+        tags:
+          type: array
+          items:
+            type: string
+        compatibleTools:
+          type: array
+          items:
+            type: string
+        resolution:
+          type: string
+        orientation:
+          type: string
+          enum: [horizontal, vertical, square]
+        isPremium:
+          type: boolean
+        isAIGenerated:
+          type: boolean
+        metadata:
+          type: string
+          description: Asset metadata document id.
+    AssetStatusUpdateRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [pending_review, approved, rejected]
+    Subscription:
+      type: object
+      properties:
+        _id:
+          type: string
+        plan:
+          $ref: '#/components/schemas/Plan'
+        user:
+          $ref: '#/components/schemas/UserPublic'
+        organization:
+          type: object
+          nullable: true
+        status:
+          type: string
+          enum: [active, canceled, expired]
+        stripeCustomerId:
+          type: string
+        stripeSubscriptionId:
+          type: string
+        currentPeriodStart:
+          type: string
+          format: date-time
+        currentPeriodEnd:
+          type: string
+          format: date-time
+        cancelAtPeriodEnd:
+          type: boolean
+    SubscriptionCreateRequest:
+      type: object
+      required:
+        [
+          plan,
+          stripeCustomerId,
+          stripeSubscriptionId,
+          currentPeriodStart,
+          currentPeriodEnd,
+        ]
+      properties:
+        plan:
+          type: string
+        user:
+          type: string
+        organization:
+          type: string
+        status:
+          type: string
+          enum: [active, canceled, expired]
+        stripeCustomerId:
+          type: string
+        stripeSubscriptionId:
+          type: string
+        currentPeriodStart:
+          type: string
+          format: date-time
+        currentPeriodEnd:
+          type: string
+          format: date-time
+        cancelAtPeriodEnd:
+          type: boolean
+          default: false
+    SubscriptionUpdateRequest:
+      allOf:
+        - $ref: '#/components/schemas/SubscriptionCreateRequest'
+    CheckoutSessionRequest:
+      type: object
+      required: [planId]
+      properties:
+        planId:
+          type: string
+          format: objectId
+        successUrl:
+          type: string
+          format: uri
+        cancelUrl:
+          type: string
+          format: uri
+    CheckoutSessionResponse:
+      type: object
+      properties:
+        sessionId:
+          type: string
+        url:
+          type: string
+          format: uri
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+    VerifyCheckoutSessionRequest:
+      type: object
+      required: [sessionId]
+      properties:
+        sessionId:
+          type: string
+  responses:
+    BadRequest:
+      description: Validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Missing/invalid authentication
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+paths:
+  /auth/signup:
+    post:
+      tags: [Auth]
+      summary: Start email verification-based signup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignupRequest'
+      responses:
+        '200':
+          description: Verification email dispatched
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/BaseSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/UserPublic'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /auth/register-user:
+    post:
+      tags: [Auth]
+      summary: Complete signup with emailed token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterUserRequest'
+      responses:
+        '201':
+          description: User registered and authenticated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/BaseSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/AuthTokens'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login with email/password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Either access token or OTP challenge
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - allOf:
+                      - $ref: '#/components/schemas/BaseSuccess'
+                      - type: object
+                        properties:
+                          data:
+                            $ref: '#/components/schemas/AuthTokens'
+                  - allOf:
+                      - $ref: '#/components/schemas/BaseSuccess'
+                      - type: object
+                        properties:
+                          data:
+                            $ref: '#/components/schemas/OtpChallenge'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /auth/verify-otp:
+    post:
+      tags: [Auth]
+      summary: Exchange OTP for tokens
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OtpVerificationRequest'
+      responses:
+        '200':
+          description: OTP verified
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/BaseSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/AuthTokens'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Invalidate refresh token cookie
+      responses:
+        '200':
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/BaseSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /auth/change-password:
+    post:
+      tags: [Auth]
+      summary: Change password for logged-in admin/subscriber/author
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '200':
+          description: Password changed
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/BaseSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          passwordChangedAt:
+                            type: string
+                            format: date-time
+                            nullable: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /auth/access-token:
+    get:
+      tags: [Auth]
+      summary: Mint new access token using refresh cookie
+      responses:
+        '200':
+          description: Access token issued
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/BaseSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/AccessTokenEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /auth/forgot-password:
+    post:
+      tags: [Auth]
+      summary: Trigger password reset link email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForgotPasswordRequest'
+      responses:
+        '200':
+          description: Reset email sent
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/BaseSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          result:
+                            type: object
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /auth/reset-password:
+    post:
+      tags: [Auth]
+      summary: Reset password via emailed token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+      responses:
+        '200':
+          description: Password reset
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/BaseSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /users/me:
+    get:
+      tags: [Users]
+      summary: Fetch profile of authenticated user
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Profile returned
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/BaseSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/UserPublic'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /users/{id}:
+    get:
+      tags: [Users]
+      summary: Get public info for a user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User found
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/BaseSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/UserPublic'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Users]
+      summary: Update authenticated user’s profile (path id is ignored)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                profileImage:
+                  type: string
+                  format: binary
+                name:
+                  type: string
+                bio:
+                  type: string
+      responses:
+        '200':
+          description: Profile updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/BaseSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/UserPublic'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /users:
+    get:
+      tags: [Users]
+      summary: List users (admin & super_admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: search
+          schema:
+            type: string
+        - in: query
+          name: role
+          schema:
+            type: string
+        - in: query
+          name: status
+          schema:
+            type: string
+        - in: query
+          name: authorVerificationStatus
+          schema:
+            type: string
+        - in: query
+          name: orgRole
+          schema:
+            type: string
+        - in: query
+          name: isDeleted
+          schema:
+            type: boolean
+        - in: query
+          name: organization
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+        - in: query
+          name: limit
+          schema:
+            type: integer
+        - in: query
+          name: sort
+          schema:
+            type: string
+        - in: query
+          name: fields
+          schema:
+            type: string
+        - in: query
+          name: searchTerm
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Users plus pagination meta
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/BaseSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/UserPublic'
+                      meta:
+                        $ref: '#/components/schemas/PaginationMeta'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /plans:
+    get:
+      tags: [Plans]
+      summary: Get all active plans
+      responses:
+        '200':
+          description: Plan list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/BaseSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Plan'
+    post:
+      tags: [Plans]
+      summary: Create plan (super_admin/admin)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlanCreateRequest'
+      responses:
+        '201':
+          description: Plan created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/BaseSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Plan'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /plans/{id}:
+    patch:
+      tags: [Plans]
+      summary: Update plan (super_admin/admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlanUpdateRequest'
+      responses:
+        '200':
+          description: Plan updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/BaseSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Plan'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /categories:
+    get:
+      tags: [Categories]
+      summary: List categories
+      responses:
+        '200':
+          description: Categories retrieved
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/BaseSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Category'
+    post:
+      tags: [Categories]
+      summary: Create category (super_admin/admin)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryCreateRequest'
+      responses:
+        '201':
+          description: Category created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/BaseSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Category'
+  /categories/{id}:
+    get:
+      tags: [Categories]
+      summary: Fetch single category
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Category found
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/BaseSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Category'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Categories]
+      summary: Update category (super_admin/admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryUpdateRequest'
+      responses:
+        '200':
+          description: Category updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/BaseSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Category'
+  /assets:
+    get:
+      tags: [Assets]
+      summary: Browse assets with advanced filters
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: assetType
+          in: query
+          schema:
+            type: string
+        - name: orientation
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: resolution
+          in: query
+          schema:
+            type: string
+        - name: resourceType
+          in: query
+          schema:
+            type: string
+        - name: isPremium
+          in: query
+          schema:
+            type: boolean
+        - name: isAIGenerated
+          in: query
+          schema:
+            type: boolean
+        - name: author
+          in: query
+          schema:
+            type: string
+        - name: categories
+          in: query
+          schema:
+            type: string
+            description: Comma-separated category ids
+        - name: tags
+          in: query
+          schema:
+            type: string
+            description: Comma-separated tags
+        - name: compatibleTools
+          in: query
+          schema:
+            type: string
+        - name: keywords
+          in: query
+          schema:
+            type: string
+        - name: minSize
+          in: query
+          schema:
+            type: number
+        - name: maxSize
+          in: query
+          schema:
+            type: number
+        - name: minWidth
+          in: query
+          schema:
+            type: number
+        - name: maxWidth
+          in: query
+          schema:
+            type: number
+        - name: minHeight
+          in: query
+          schema:
+            type: number
+        - name: maxHeight
+          in: query
+          schema:
+            type: number
+        - name: minDuration
+          in: query
+          schema:
+            type: number
+        - name: maxDuration
+          in: query
+          schema:
+            type: number
+        - name: minDownloads
+          in: query
+          schema:
+            type: number
+        - name: maxDownloads
+          in: query
+          schema:
+            type: number
+        - name: minViews
+          in: query
+          schema:
+            type: number
+        - name: maxViews
+          in: query
+          schema:
+            type: number
+        - name: minLikes
+          in: query
+          schema:
+            type: number
+        - name: maxLikes
+          in: query
+          schema:
+            type: number
+        - name: sort
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: fields
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Assets returned
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/BaseSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Asset'
+                      meta:
+                        $ref: '#/components/schemas/PaginationMeta'
+    post:
+      tags: [Assets]
+      summary: Upload new asset (authors)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Required main asset file (image/video).
+                preview:
+                  type: string
+                  format: binary
+                  description: Optional preview clip for videos.
+                data:
+                  type: string
+                  description: JSON string matching AssetCreatePayload.
+            encoding:
+              data:
+                contentType: application/json
+      responses:
+        '201':
+          description: Asset created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/BaseSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Asset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /assets/{id}:
+    get:
+      tags: [Assets]
+      summary: Fetch single asset
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Asset data
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/BaseSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Asset'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Assets]
+      summary: Update asset status (super_admin/admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetStatusUpdateRequest'
+      responses:
+        '200':
+          description: Asset updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/BaseSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Asset'
+  /subscriptions/checkout:
+    post:
+      tags: [Subscriptions]
+      summary: Create Stripe checkout session (subscriber)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckoutSessionRequest'
+      responses:
+        '201':
+          description: Session created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/BaseSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/CheckoutSessionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /subscriptions/checkout/verify:
+    post:
+      tags: [Subscriptions]
+      summary: Verify checkout session and activate subscription
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyCheckoutSessionRequest'
+      responses:
+        '200':
+          description: Subscription activated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/BaseSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Subscription'
+  /subscriptions:
+    get:
+      tags: [Subscriptions]
+      summary: List subscriptions (super_admin/admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+            description: Matches stripeCustomerId or stripeSubscriptionId.
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: cancelAtPeriodEnd
+          in: query
+          schema:
+            type: boolean
+        - name: plan
+          in: query
+          schema:
+            type: string
+        - name: user
+          in: query
+          schema:
+            type: string
+        - name: organization
+          in: query
+          schema:
+            type: string
+        - name: periodStartFrom
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: periodStartTo
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: periodEndFrom
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: periodEndTo
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: sort
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Subscriptions returned
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/BaseSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Subscription'
+                      meta:
+                        $ref: '#/components/schemas/PaginationMeta'
+    post:
+      tags: [Subscriptions]
+      summary: Manually create subscription (super_admin/admin)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubscriptionCreateRequest'
+      responses:
+        '201':
+          description: Subscription created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/BaseSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Subscription'
+  /subscriptions/{id}:
+    get:
+      tags: [Subscriptions]
+      summary: Fetch subscription by id (super_admin/admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Subscription details
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/BaseSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Subscription'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Subscriptions]
+      summary: Update subscription (super_admin/admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubscriptionUpdateRequest'
+      responses:
+        '200':
+          description: Subscription updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/BaseSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Subscription'
+  /stripe/webhook:
+    post:
+      tags: [Stripe]
+      summary: Receive Stripe webhook events
+      description: >
+        Requires the `Stripe-Signature` header and the raw Stripe payload.
+        No authentication—Stripe verifies signatures instead.
+      servers:
+        - url: https://api.creatifyx.ai/api/v1/stripe
+          description: Production webhook base
+        - url: http://localhost:5000/api/v1/stripe
+          description: Local webhook base
+      parameters:
+        - in: header
+          name: Stripe-Signature
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Raw Stripe event payload
+      responses:
+        '200':
+          description: Event acknowledged
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  received:
+                    type: boolean
+                    example: true
+        '400':
+          $ref: '#/components/responses/BadRequest'

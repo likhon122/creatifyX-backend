@@ -1,0 +1,614 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "CreatifyX REST API",
+    "version": "1.0.0",
+    "description": "Automatically generated OpenAPI document that describes every public HTTP endpoint exposed by the CreatifyX back-end.  \nAll routes are rooted at `/api/v1` except for the Stripe webhook which is available at `/api/v1/stripe/webhook`.\n\nMost mutation routes are protected with a bearer token that has to be supplied via `Authorization: Bearer <jwt>`."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000/api/v1",
+      "description": "Local development server"
+    }
+  ],
+  "tags": [
+    { "name": "Auth", "description": "Authentication & authorisation" },
+    { "name": "Users", "description": "User profile operations" },
+    { "name": "Plans", "description": "Billing plans" },
+    { "name": "Categories", "description": "Asset categories" },
+    { "name": "Assets", "description": "Digital asset library" },
+    { "name": "Subscriptions", "description": "User & organisation subscriptions" },
+    { "name": "Stripe", "description": "Stripe webhook (no auth)" }
+  ],
+  "paths": {
+    "/auth/signup": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Start e-mail verification signup flow",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SignupRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Verification e-mail sent",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/GenericSuccess" } }
+            }
+          }
+        }
+      }
+    },
+    "/auth/register-user": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Finish signup using e-mail token",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/RegisterUserRequest" } }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "User created & logged-in",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/AuthTokenResponse" } }
+            }
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Login (OTP for privileged roles)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/LoginRequest" } }
+          }
+        },
+        "responses": {
+          "200": { "description": "Either OTP challenge or tokens", "content": { "application/json": { "schema": { "oneOf": [ { "$ref": "#/components/schemas/AuthTokenResponse" }, { "$ref": "#/components/schemas/OtpChallenge" } ] } } } }
+        }
+      }
+    },
+    "/auth/verify-otp": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Verify login OTP",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/VerifyOtpRequest" } }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Logged-in",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/AuthTokenResponse" } }
+            }
+          }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Clear refresh cookie",
+        "responses": {
+          "200": { "description": "Logged-out", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/GenericSuccess" } } } }
+        }
+      }
+    },
+    "/auth/change-password": {
+      "post": {
+        "security": [{ "BearerAuth": [] }],
+        "tags": ["Auth"],
+        "summary": "Change current password",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ChangePasswordRequest" } } }
+        },
+        "responses": {
+          "200": { "description": "Password updated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/GenericSuccess" } } } }
+        }
+      }
+    },
+    "/auth/access-token": {
+      "get": {
+        "tags": ["Auth"],
+        "summary": "Exchange refresh cookie for fresh access token",
+        "responses": {
+          "200": { "description": "Token issued", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AccessToken" } } } }
+        }
+      }
+    },
+    "/auth/forgot-password": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Send reset link",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ForgotPasswordRequest" } } } },
+        "responses": { "200": { "description": "E-mail sent", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/GenericSuccess" } } } } }
+      }
+    },
+    "/auth/reset-password": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Reset password using token",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ResetPasswordRequest" } } } },
+        "responses": { "200": { "description": "Password reset", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/GenericSuccess" } } } } }
+      }
+    },
+
+    "/users/me": {
+      "get": {
+        "security": [{ "BearerAuth": [] }],
+        "tags": ["Users"],
+        "summary": "Current user profile",
+        "responses": {
+          "200": { "description": "User object", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/User" } } } }
+        }
+      }
+    },
+    "/users": {
+      "get": {
+        "security": [{ "BearerAuth": [] }],
+        "tags": ["Users"],
+        "summary": "List users (admin only, supports filtering & pagination)",
+        "parameters": [
+          { "$ref": "#/components/parameters/PageParam" },
+          { "$ref": "#/components/parameters/LimitParam" },
+          { "$ref": "#/components/parameters/SearchParam" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated user list",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PaginatedUsers" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/{id}": {
+      "get": {
+        "tags": ["Users"],
+        "summary": "Get public profile by id",
+        "parameters": [{ "$ref": "#/components/parameters/PathId" }],
+        "responses": {
+          "200": { "description": "User object", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/User" } } } },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "patch": {
+        "security": [{ "BearerAuth": [] }],
+        "tags": ["Users"],
+        "summary": "Update profile (name, bio, avatar)",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": { "$ref": "#/components/schemas/UpdateUserRequestMultipart" }
+            }
+          }
+        },
+        "parameters": [{ "$ref": "#/components/parameters/PathId" }],
+        "responses": {
+          "200": { "description": "Updated user", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/User" } } } }
+        }
+      }
+    },
+
+    "/plans": {
+      "get": {
+        "tags": ["Plans"],
+        "summary": "List available plans",
+        "responses": {
+          "200": { "description": "Plans", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PlanArray" } } } }
+        }
+      },
+      "post": {
+        "security": [{ "BearerAuth": [] }],
+        "tags": ["Plans"],
+        "summary": "Create plan (admin)",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreatePlanRequest" } } } },
+        "responses": { "201": { "description": "Plan created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Plan" } } } } }
+      }
+    },
+    "/plans/{id}": {
+      "patch": {
+        "security": [{ "BearerAuth": [] }],
+        "tags": ["Plans"],
+        "summary": "Update plan (admin)",
+        "parameters": [{ "$ref": "#/components/parameters/PathId" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UpdatePlanRequest" } } } },
+        "responses": { "200": { "description": "Updated plan", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Plan" } } } } }
+      }
+    },
+
+    "/categories": {
+      "get": {
+        "tags": ["Categories"],
+        "summary": "List categories",
+        "responses": { "200": { "description": "Categories", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CategoryArray" } } } } }
+      },
+      "post": {
+        "security": [{ "BearerAuth": [] }],
+        "tags": ["Categories"],
+        "summary": "Create category",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateCategoryRequest" } } } },
+        "responses": { "201": { "description": "Category", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Category" } } } } }
+      }
+    },
+    "/categories/{id}": {
+      "get": {
+        "tags": ["Categories"],
+        "summary": "Single category",
+        "parameters": [{ "$ref": "#/components/parameters/PathId" }],
+        "responses": { "200": { "description": "Category", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Category" } } } } }
+      },
+      "patch": {
+        "security": [{ "BearerAuth": [] }],
+        "tags": ["Categories"],
+        "summary": "Update category",
+        "parameters": [{ "$ref": "#/components/parameters/PathId" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UpdateCategoryRequest" } } } },
+        "responses": { "200": { "description": "Updated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Category" } } } } }
+      }
+    },
+
+    "/assets": {
+      "get": {
+        "tags": ["Assets"],
+        "summary": "Search & filter assets",
+        "parameters": [
+          { "$ref": "#/components/parameters/PageParam" },
+          { "$ref": "#/components/parameters/LimitParam" },
+          { "$ref": "#/components/parameters/SearchParam" }
+        ],
+        "responses": { "200": { "description": "Assets list", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PaginatedAssets" } } } } }
+      },
+      "post": {
+        "security": [{ "BearerAuth": [] }],
+        "tags": ["Assets"],
+        "summary": "Upload new asset (author).  `file` (required) and optional `preview` fields must be uploaded as multipart/form-data.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": { "$ref": "#/components/schemas/CreateAssetMultipart" }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Asset created (pending review)", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Asset" } } } }
+        }
+      }
+    },
+    "/assets/{id}": {
+      "get": {
+        "tags": ["Assets"],
+        "summary": "Get asset by id",
+        "parameters": [{ "$ref": "#/components/parameters/PathId" }],
+        "responses": { "200": { "description": "Asset", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Asset" } } } } }
+      },
+      "patch": {
+        "security": [{ "BearerAuth": [] }],
+        "tags": ["Assets"],
+        "summary": "Moderation update (status only)",
+        "parameters": [{ "$ref": "#/components/parameters/PathId" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "status": { "$ref": "#/components/schemas/AssetStatus" } }, "required": ["status"] } } } },
+        "responses": { "200": { "description": "Updated asset", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Asset" } } } } }
+      }
+    },
+
+    "/subscriptions/checkout": {
+      "post": {
+        "security": [{ "BearerAuth": [] }],
+        "tags": ["Subscriptions"],
+        "summary": "Create Stripe checkout session",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateCheckoutSessionRequest" } } } },
+        "responses": { "201": { "description": "Checkout session url", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CheckoutSessionResponse" } } } } }
+      }
+    },
+    "/subscriptions/checkout/verify": {
+      "post": {
+        "security": [{ "BearerAuth": [] }],
+        "tags": ["Subscriptions"],
+        "summary": "Verify paid session & activate subscription",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/VerifyCheckoutSessionRequest" } } } },
+        "responses": { "200": { "description": "Subscription object", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Subscription" } } } } }
+      }
+    },
+    "/subscriptions": {
+      "get": {
+        "security": [{ "BearerAuth": [] }],
+        "tags": ["Subscriptions"],
+        "summary": "List subscriptions (admin)",
+        "parameters": [
+          { "$ref": "#/components/parameters/PageParam" },
+          { "$ref": "#/components/parameters/LimitParam" }
+        ],
+        "responses": { "200": { "description": "Subscriptions list", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PaginatedSubscriptions" } } } } }
+      },
+      "post": {
+        "security": [{ "BearerAuth": [] }],
+        "tags": ["Subscriptions"],
+        "summary": "Create subscription manually",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateSubscriptionRequest" } } } },
+        "responses": { "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Subscription" } } } } }
+      }
+    },
+    "/subscriptions/{id}": {
+      "get": {
+        "security": [{ "BearerAuth": [] }],
+        "tags": ["Subscriptions"],
+        "summary": "Get subscription",
+        "parameters": [{ "$ref": "#/components/parameters/PathId" }],
+        "responses": { "200": { "description": "Subscription", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Subscription" } } } } }
+      },
+      "patch": {
+        "security": [{ "BearerAuth": [] }],
+        "tags": ["Subscriptions"],
+        "summary": "Update subscription",
+        "parameters": [{ "$ref": "#/components/parameters/PathId" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UpdateSubscriptionRequest" } } } },
+        "responses": { "200": { "description": "Updated subscription", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Subscription" } } } } }
+      }
+    },
+
+    "/stripe/webhook": {
+      "post": {
+        "tags": ["Stripe"],
+        "summary": "Stripe signed webhook (raw body)",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object", "description": "Stripe event object" } } }
+        },
+        "responses": {
+          "200": { "description": "Event accepted", "content": { "application/json": { "schema": { "type": "object", "properties": { "received": { "type": "boolean" } } } } } }
+        }
+      }
+    }
+  },
+
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "parameters": {
+      "PageParam": { "name": "page", "in": "query", "description": "Page number", "schema": { "type": "integer", "minimum": 1 } },
+      "LimitParam": { "name": "limit", "in": "query", "description": "Items per page", "schema": { "type": "integer", "minimum": 1, "maximum": 100 } },
+      "SearchParam": { "name": "search", "in": "query", "description": "Free text search", "schema": { "type": "string" } },
+      "PathId": { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "pattern": "^[a-fA-F0-9]{24}$" } }
+    },
+    "responses": {
+      "NotFound": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+    },
+    "schemas": {
+      "GenericSuccess": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "const": true },
+          "message": { "type": "string" },
+          "data": { "type": ["object", "array", "string", "null"] }
+        },
+        "required": ["success", "message", "data"]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "const": false },
+          "message": { "type": "string" },
+          "errorSources": { "type": "array", "items": { "type": "object", "properties": { "path": { "type": "string" }, "message": { "type": "string" } } } }
+        }
+      },
+
+      "SignupRequest": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "minLength": 3 },
+          "email": { "type": "string", "format": "email" },
+          "password": { "type": "string", "minLength": 6, "maxLength": 32 }
+        },
+        "required": ["name", "email", "password"]
+      },
+      "RegisterUserRequest": { "type": "object", "properties": { "token": { "type": "string" } }, "required": ["token"] },
+      "LoginRequest": { "type": "object", "properties": { "email": { "type": "string", "format": "email" }, "password": { "type": "string" } }, "required": ["email", "password"] },
+      "VerifyOtpRequest": { "type": "object", "properties": { "email": { "type": "string", "format": "email" }, "otp": { "type": "integer" } }, "required": ["email", "otp"] },
+      "OtpChallenge": { "type": "object", "properties": { "success": { "type": "boolean" }, "message": { "type": "string" }, "data": { "type": "object", "properties": { "otp": { "type": "string" } } } } },
+      "ChangePasswordRequest": { "type": "object", "properties": { "oldPassword": { "type": "string" }, "newPassword": { "type": "string", "minLength": 6 } }, "required": ["oldPassword", "newPassword"] },
+      "ForgotPasswordRequest": { "type": "object", "properties": { "email": { "type": "string", "format": "email" } }, "required": ["email"] },
+      "ResetPasswordRequest": { "type": "object", "properties": { "email": { "type": "string", "format": "email" }, "token": { "type": "string" }, "newPassword": { "type": "string", "minLength": 6 } }, "required": ["email", "token", "newPassword"] },
+
+      "AccessToken": { "type": "object", "properties": { "success": { "type": "boolean" }, "data": { "type": "object", "properties": { "accessToken": { "type": "string" } } } } },
+      "AuthTokenResponse": { "type": "object", "properties": { "success": { "type": "boolean" }, "data": { "type": "object", "properties": { "userInfo": { "$ref": "#/components/schemas/User" }, "accessToken": { "type": "string" } } } } },
+
+      "User": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string" },
+          "name": { "type": "string" },
+          "email": { "type": "string", "format": "email" },
+          "role": { "type": "string", "enum": ["subscriber", "author", "admin", "super_admin"] },
+          "profileImage": { "type": "string", "format": "uri" },
+          "bio": { "type": "string" },
+          "organization": { "type": ["string", "null"] },
+          "orgRole": { "type": ["string", "null"], "enum": ["owner", "admin", "member", null] },
+          "status": { "type": "string", "enum": ["active", "inactive", "blocked"] },
+          "isPremium": { "type": "boolean" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "UpdateUserRequestMultipart": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "bio": { "type": "string" },
+          "profileImage": { "type": "string", "format": "binary" }
+        }
+      },
+      "PaginatedUsers": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "meta": { "$ref": "#/components/schemas/PaginationMeta" },
+          "data": { "type": "array", "items": { "$ref": "#/components/schemas/User" } }
+        }
+      },
+
+      "Plan": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string" },
+          "name": { "type": "string" },
+          "slug": { "type": "string" },
+          "type": { "type": "string", "enum": ["individual", "team", "enterprise"] },
+          "billingCycle": { "type": "string", "enum": ["monthly", "yearly"] },
+          "price": { "type": "number" },
+          "currency": { "type": "string", "enum": ["USD", "BDT"] },
+          "stripePriceId": { "type": "string" },
+          "features": { "type": "array", "items": { "type": "string" } },
+          "isActive": { "type": "boolean" }
+        }
+      },
+      "PlanArray": { "type": "array", "items": { "$ref": "#/components/schemas/Plan" } },
+      "CreatePlanRequest": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Plan" },
+          { "type": "object", "required": ["name", "type", "billingCycle", "price", "currency"] }
+        ]
+      },
+      "UpdatePlanRequest": { "allOf": [ { "$ref": "#/components/schemas/Plan" } ] },
+
+      "Category": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string" },
+          "name": { "type": "string" },
+          "slug": { "type": "string" },
+          "parentCategory": { "type": ["string", "null"] },
+          "categoryType": { "type": "string", "enum": ["sub_category", "main_category"] },
+          "availableFilters": { "type": "array", "items": { "$ref": "#/components/schemas/CategoryFilter" } }
+        }
+      },
+      "CategoryFilter": {
+        "type": "object",
+        "properties": {
+          "filterKey": { "type": "string" },
+          "displayName": { "type": "string" },
+          "options": { "type": "array", "items": { "$ref": "#/components/schemas/CategoryFilterOption" } }
+        }
+      },
+      "CategoryFilterOption": { "type": "object", "properties": { "displayName": { "type": "string" }, "value": { "type": "string" } } },
+      "CategoryArray": { "type": "array", "items": { "$ref": "#/components/schemas/Category" } },
+      "CreateCategoryRequest": { "required": ["name", "availableFilters"], "allOf": [ { "$ref": "#/components/schemas/Category" } ] },
+      "UpdateCategoryRequest": { "allOf": [ { "$ref": "#/components/schemas/Category" } ] },
+
+      "AssetStatus": { "type": "string", "enum": ["pending_review", "approved", "rejected"] },
+      "Asset": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string" },
+          "title": { "type": "string" },
+          "slug": { "type": "string" },
+          "author": { "type": "string" },
+          "status": { "$ref": "#/components/schemas/AssetStatus" },
+          "storage": {
+            "type": "object",
+            "properties": {
+              "resource_type": { "type": "string", "enum": ["image", "video", "raw"] },
+              "format": { "type": "string" },
+              "bytes": { "type": "integer" },
+              "width": { "type": "integer" },
+              "height": { "type": "integer" }
+            }
+          },
+          "previews": {
+            "type": "object",
+            "properties": {
+              "thumbnail": { "type": "object", "properties": { "secure_url": { "type": "string", "format": "uri" } } }
+            }
+          },
+          "assetType": { "type": "string", "enum": ["image", "video", "web", "presentation", "graphic-template"] },
+          "categories": { "type": "array", "items": { "type": "string" } },
+          "tags": { "type": "array", "items": { "type": "string" } },
+          "orientation": { "type": "string", "enum": ["horizontal", "vertical", "square"] },
+          "isPremium": { "type": "boolean" },
+          "isAIGenerated": { "type": "boolean" },
+          "stats": { "type": "object", "properties": { "downloads": { "type": "integer" }, "views": { "type": "integer" }, "likes": { "type": "integer" } } }
+        }
+      },
+      "PaginatedAssets": { "type": "object", "properties": { "meta": { "$ref": "#/components/schemas/PaginationMeta" }, "data": { "type": "array", "items": { "$ref": "#/components/schemas/Asset" } } } },
+      "CreateAssetMultipart": {
+        "type": "object",
+        "properties": {
+          "data": { "type": "string", "description": "JSON encoded asset body fields" },
+          "file": { "type": "string", "format": "binary" },
+          "preview": { "type": "string", "format": "binary" }
+        },
+        "required": ["file", "data"]
+      },
+
+      "Subscription": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string" },
+          "plan": { "$ref": "#/components/schemas/Plan" },
+          "user": { "$ref": "#/components/schemas/User" },
+          "status": { "type": "string", "enum": ["active", "canceled", "expired"] },
+          "stripeCustomerId": { "type": "string" },
+          "stripeSubscriptionId": { "type": "string" },
+          "currentPeriodStart": { "type": "string", "format": "date-time" },
+          "currentPeriodEnd": { "type": "string", "format": "date-time" },
+          "cancelAtPeriodEnd": { "type": "boolean" }
+        }
+      },
+      "PaginatedSubscriptions": { "type": "object", "properties": { "meta": { "$ref": "#/components/schemas/PaginationMeta" }, "data": { "type": "array", "items": { "$ref": "#/components/schemas/Subscription" } } } },
+      "CreateSubscriptionRequest": {
+        "type": "object",
+        "properties": {
+          "plan": { "type": "string" },
+          "user": { "type": "string" },
+          "organization": { "type": "string" },
+          "stripeCustomerId": { "type": "string" },
+          "stripeSubscriptionId": { "type": "string" },
+          "currentPeriodStart": { "type": "string", "format": "date-time" },
+          "currentPeriodEnd": { "type": "string", "format": "date-time" },
+          "status": { "type": "string", "enum": ["active", "canceled", "expired"] },
+          "cancelAtPeriodEnd": { "type": "boolean" }
+        },
+        "required": ["plan", "stripeCustomerId", "stripeSubscriptionId", "currentPeriodStart", "currentPeriodEnd"]
+      },
+      "UpdateSubscriptionRequest": { "allOf": [ { "$ref": "#/components/schemas/CreateSubscriptionRequest" } ] },
+
+      "CreateCheckoutSessionRequest": { "type": "object", "properties": { "planId": { "type": "string" }, "successUrl": { "type": "string", "format": "uri" }, "cancelUrl": { "type": "string", "format": "uri" } }, "required": ["planId"] },
+      "CheckoutSessionResponse": { "type": "object", "properties": { "sessionId": { "type": "string" }, "url": { "type": "string", "format": "uri" }, "expiresAt": { "type": "string", "format": "date-time" } } },
+      "VerifyCheckoutSessionRequest": { "type": "object", "properties": { "sessionId": { "type": "string" } }, "required": ["sessionId"] },
+
+      "PaginationMeta": {
+        "type": "object",
+        "properties": {
+          "total": { "type": "integer" },
+          "page": { "type": "integer" },
+          "limit": { "type": "integer" },
+          "totalPages": { "type": "integer" },
+          "hasMore": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

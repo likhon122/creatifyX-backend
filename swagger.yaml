@@ -1,0 +1,2078 @@
+openapi: 3.0.0
+info:
+  title: CreatifyX API
+  description: |
+    Complete API documentation for CreatifyX - A digital asset marketplace platform.
+
+    ## Features
+    - User authentication and authorization
+    - Asset management and marketplace
+    - Subscription plans and payments
+    - Individual asset purchases via Stripe
+    - Review and rating system
+    - Contact/Support ticketing system
+    - Analytics dashboard for authors and admins
+
+    ## Authentication
+    Most endpoints require JWT authentication. Include the token in the Authorization header:
+    ```
+    Authorization: Bearer <your_jwt_token>
+    ```
+
+    ## User Roles
+    - **subscriber**: Can browse, purchase assets, subscribe to plans
+    - **author**: Can upload assets, view earnings analytics
+    - **admin**: Can manage users, assets, plans, categories
+    - **super_admin**: Full system access
+
+  version: 1.0.0
+  contact:
+    name: CreatifyX API Support
+    email: support@creatifyx.com
+
+servers:
+  - url: http://localhost:5000/api/v1
+    description: Development server
+  - url: https://api.creatifyx.com/api/v1
+    description: Production server
+
+tags:
+  - name: Authentication
+    description: User authentication and account management
+  - name: Users
+    description: User profile and management
+  - name: Plans
+    description: Subscription plan management
+  - name: Categories
+    description: Asset category management
+  - name: Assets
+    description: Digital asset management
+  - name: Subscriptions
+    description: User subscription management
+  - name: Individual Payments
+    description: Individual asset purchase payments
+  - name: Asset Stats
+    description: Asset views, likes, downloads tracking
+  - name: Reviews
+    description: Asset reviews and ratings
+  - name: Contact
+    description: Contact/Support ticket system
+  - name: Dashboard
+    description: Analytics and earnings dashboard
+  - name: Stripe
+    description: Stripe webhook handlers
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token for authenticated requests
+
+  schemas:
+    User:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: '691d6a4bcdbf0fee7bbea6b8'
+        name:
+          type: string
+          example: 'John Doe'
+        email:
+          type: string
+          example: 'john@example.com'
+        role:
+          type: string
+          enum: [subscriber, author, admin, super_admin]
+          example: 'author'
+        profileImage:
+          type: string
+          example: 'https://api.dicebear.com/7.x/adventurer/svg?seed=abc123'
+        bio:
+          type: string
+        organization:
+          type: string
+          nullable: true
+        orgRole:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [active, blocked]
+        isPremium:
+          type: boolean
+        authorVerificationStatus:
+          type: string
+          enum: [pending, active, rejected]
+        totalEarnings:
+          type: number
+          example: 1250.50
+        isDeleted:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Plan:
+      type: object
+      properties:
+        _id:
+          type: string
+        name:
+          type: string
+          example: 'Premium Monthly'
+        description:
+          type: string
+        price:
+          type: number
+          example: 29.99
+        billingCycle:
+          type: string
+          enum: [monthly, yearly]
+        features:
+          type: array
+          items:
+            type: string
+        stripePriceId:
+          type: string
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    Category:
+      type: object
+      properties:
+        _id:
+          type: string
+        name:
+          type: string
+          example: 'Broadcast Packages'
+        slug:
+          type: string
+          example: 'broadcast-packages'
+        parentCategory:
+          type: boolean
+          example: true
+        subCategories:
+          type: array
+          items:
+            type: string
+        categoryType:
+          type: string
+          enum: [main_category, sub_category]
+        availableFilters:
+          type: array
+          items:
+            type: object
+            properties:
+              filterKey:
+                type: string
+              displayName:
+                type: string
+              options:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    displayName:
+                      type: string
+                    value:
+                      oneOf:
+                        - type: string
+                        - type: array
+                          items:
+                            type: object
+                            properties:
+                              displayName:
+                                type: string
+                              filterKey:
+                                type: string
+
+    Asset:
+      type: object
+      properties:
+        _id:
+          type: string
+        title:
+          type: string
+          example: 'Modern Logo Pack'
+        slug:
+          type: string
+        author:
+          type: string
+        assetType:
+          type: string
+          enum: [image, video, audio, document, '3d', template, other]
+        categories:
+          type: array
+          items:
+            type: string
+        tags:
+          type: array
+          items:
+            type: string
+        compatibleTools:
+          type: array
+          items:
+            type: string
+        resolution:
+          type: string
+          example: '1920x1080'
+        orientation:
+          type: string
+          enum: [landscape, portrait, square]
+        isPremium:
+          type: boolean
+        isAIGenerated:
+          type: boolean
+        livePreview:
+          type: string
+        price:
+          type: number
+          example: 49.99
+        discountPrice:
+          type: number
+        status:
+          type: string
+          enum: [pending_review, approved, rejected]
+        storage:
+          type: object
+          properties:
+            public_id:
+              type: string
+            secure_url:
+              type: string
+            resource_type:
+              type: string
+            format:
+              type: string
+            bytes:
+              type: number
+        previews:
+          type: object
+          properties:
+            thumbnail:
+              type: object
+            watermark:
+              type: string
+            images:
+              type: array
+              items:
+                type: object
+
+    Subscription:
+      type: object
+      properties:
+        _id:
+          type: string
+        user:
+          type: string
+        plan:
+          type: string
+        status:
+          type: string
+          enum: [active, canceled, past_due, expired]
+        currentPeriodStart:
+          type: string
+          format: date-time
+        currentPeriodEnd:
+          type: string
+          format: date-time
+        stripeSubscriptionId:
+          type: string
+
+    IndividualPayment:
+      type: object
+      properties:
+        _id:
+          type: string
+        user:
+          type: string
+        asset:
+          type: string
+        originalPrice:
+          type: number
+        discountAmount:
+          type: number
+        finalPrice:
+          type: number
+        isPremiumUser:
+          type: boolean
+        paymentStatus:
+          type: string
+          enum: [pending, completed, failed, refunded]
+        stripeSessionId:
+          type: string
+        stripePaymentIntentId:
+          type: string
+        transactionDate:
+          type: string
+          format: date-time
+
+    Review:
+      type: object
+      properties:
+        _id:
+          type: string
+        asset:
+          type: string
+        user:
+          type: string
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        comment:
+          type: string
+        authorReply:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    Contact:
+      type: object
+      properties:
+        _id:
+          type: string
+        user:
+          type: string
+        subject:
+          type: string
+        category:
+          type: string
+          enum: [general, technical, billing, content, other]
+        priority:
+          type: string
+          enum: [low, medium, high, urgent]
+        message:
+          type: string
+        status:
+          type: string
+          enum: [open, in_progress, resolved, closed]
+        adminReply:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+        errorMessages:
+          type: array
+          items:
+            type: object
+        stack:
+          type: string
+
+    Success:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        statusCode:
+          type: integer
+        message:
+          type: string
+        data:
+          type: object
+
+paths:
+  # ==================== AUTHENTICATION ====================
+  /auth/signup:
+    post:
+      tags:
+        - Authentication
+      summary: User registration
+      description: Register a new user account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - email
+                - password
+                - role
+              properties:
+                name:
+                  type: string
+                  example: 'John Doe'
+                email:
+                  type: string
+                  example: 'john@example.com'
+                password:
+                  type: string
+                  example: 'SecurePass123!'
+                role:
+                  type: string
+                  enum: [subscriber, author]
+                  example: 'subscriber'
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          message:
+                            type: string
+                            example: 'Verification email sent'
+        '409':
+          description: Email already exists
+        '400':
+          description: Validation error
+
+  /auth/register-user:
+    post:
+      tags:
+        - Authentication
+      summary: Register user with additional details
+      description: Alternative registration endpoint with more user details
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - email
+                - password
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+                password:
+                  type: string
+                bio:
+                  type: string
+      responses:
+        '201':
+          description: User registered successfully
+
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: User login
+      description: Login with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  example: 'john@example.com'
+                password:
+                  type: string
+                  example: 'SecurePass123!'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          accessToken:
+                            type: string
+                          refreshToken:
+                            type: string
+                          user:
+                            $ref: '#/components/schemas/User'
+        '401':
+          description: Invalid credentials
+
+  /auth/verify-otp:
+    post:
+      tags:
+        - Authentication
+      summary: Verify email OTP
+      description: Verify email address using OTP code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - otp
+              properties:
+                email:
+                  type: string
+                otp:
+                  type: string
+                  example: '123456'
+      responses:
+        '200':
+          description: Email verified successfully
+
+  /auth/logout:
+    post:
+      tags:
+        - Authentication
+      summary: User logout
+      description: Logout and invalidate tokens
+      responses:
+        '200':
+          description: Logged out successfully
+
+  /auth/change-password:
+    post:
+      tags:
+        - Authentication
+      summary: Change password
+      description: Change password for authenticated user
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - oldPassword
+                - newPassword
+              properties:
+                oldPassword:
+                  type: string
+                newPassword:
+                  type: string
+      responses:
+        '200':
+          description: Password changed successfully
+
+  /auth/access-token:
+    get:
+      tags:
+        - Authentication
+      summary: Get new access token
+      description: Refresh access token using refresh token
+      responses:
+        '200':
+          description: New access token generated
+
+  /auth/forgot-password:
+    post:
+      tags:
+        - Authentication
+      summary: Forgot password
+      description: Request password reset email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+              properties:
+                email:
+                  type: string
+      responses:
+        '200':
+          description: Password reset email sent
+
+  /auth/reset-password:
+    post:
+      tags:
+        - Authentication
+      summary: Reset password
+      description: Reset password using reset token from email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - token
+                - newPassword
+              properties:
+                token:
+                  type: string
+                newPassword:
+                  type: string
+      responses:
+        '200':
+          description: Password reset successfully
+
+  # ==================== USERS ====================
+  /users/me:
+    get:
+      tags:
+        - Users
+      summary: Get current user profile
+      description: Get authenticated user's profile
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: User profile retrieved
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/User'
+
+  /users/{id}:
+    get:
+      tags:
+        - Users
+      summary: Get user by ID
+      description: Get single user details by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User found
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/User'
+
+    patch:
+      tags:
+        - Users
+      summary: Update user profile
+      description: Update user profile (with optional profile image upload)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                bio:
+                  type: string
+                profileImage:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Profile updated successfully
+
+  /users:
+    get:
+      tags:
+        - Users
+      summary: Get all users
+      description: Get all users (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: role
+          in: query
+          schema:
+            type: string
+            enum: [subscriber, author, admin, super_admin]
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, blocked]
+      responses:
+        '200':
+          description: Users retrieved successfully
+
+  /users/change-user-status/{id}:
+    patch:
+      tags:
+        - Users
+      summary: Change user status
+      description: Block or unblock user (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [active, blocked]
+      responses:
+        '200':
+          description: Status updated successfully
+
+  # ==================== PLANS ====================
+  /plans:
+    post:
+      tags:
+        - Plans
+      summary: Create subscription plan
+      description: Create a new subscription plan (Admin only)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - price
+                - billingCycle
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                price:
+                  type: number
+                billingCycle:
+                  type: string
+                  enum: [monthly, yearly]
+                features:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '201':
+          description: Plan created successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Plan'
+
+    get:
+      tags:
+        - Plans
+      summary: Get all plans
+      description: Get all subscription plans
+      responses:
+        '200':
+          description: Plans retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Plan'
+
+  /plans/{id}:
+    patch:
+      tags:
+        - Plans
+      summary: Update plan
+      description: Update subscription plan (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                price:
+                  type: number
+                isActive:
+                  type: boolean
+      responses:
+        '200':
+          description: Plan updated successfully
+
+  # ==================== CATEGORIES ====================
+  /categories:
+    post:
+      tags:
+        - Categories
+      summary: Create category
+      description: Create a new category (Admin only)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - slug
+              properties:
+                name:
+                  type: string
+                slug:
+                  type: string
+                parentCategory:
+                  type: boolean
+                subCategories:
+                  type: array
+                  items:
+                    type: string
+                availableFilters:
+                  type: array
+                  items:
+                    type: object
+      responses:
+        '201':
+          description: Category created successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Category'
+
+    get:
+      tags:
+        - Categories
+      summary: Get all categories
+      description: Get all categories with optional filtering
+      parameters:
+        - name: parentCategory
+          in: query
+          schema:
+            type: boolean
+          description: Filter by parent category flag
+      responses:
+        '200':
+          description: Categories retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Category'
+
+  /categories/{id}:
+    get:
+      tags:
+        - Categories
+      summary: Get category by ID
+      description: Get single category with populated subcategories
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Category retrieved successfully
+
+    patch:
+      tags:
+        - Categories
+      summary: Update category
+      description: Update category (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                slug:
+                  type: string
+                parentCategory:
+                  type: boolean
+                subCategories:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Category updated successfully
+
+  # ==================== ASSETS ====================
+  /assets:
+    post:
+      tags:
+        - Assets
+      summary: Create asset
+      description: Upload a new asset (main file + preview files)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - title
+                - slug
+                - assetType
+                - categories
+                - price
+                - mainFile
+              properties:
+                title:
+                  type: string
+                slug:
+                  type: string
+                assetType:
+                  type: string
+                categories:
+                  type: string
+                  description: JSON array of category IDs
+                tags:
+                  type: string
+                  description: JSON array of tags
+                compatibleTools:
+                  type: string
+                  description: JSON array of tools
+                orientation:
+                  type: string
+                  enum: [landscape, portrait, square]
+                isPremium:
+                  type: boolean
+                isAIGenerated:
+                  type: boolean
+                price:
+                  type: number
+                discountPrice:
+                  type: number
+                mainFile:
+                  type: string
+                  format: binary
+                preview1:
+                  type: string
+                  format: binary
+                preview2:
+                  type: string
+                  format: binary
+                preview3:
+                  type: string
+                  format: binary
+                preview4:
+                  type: string
+                  format: binary
+                preview5:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: Asset created successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Asset'
+
+    get:
+      tags:
+        - Assets
+      summary: Get all assets
+      description: Get all assets with filtering, search, and pagination
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: assetType
+          in: query
+          schema:
+            type: string
+        - name: categories
+          in: query
+          schema:
+            type: string
+          description: Comma-separated category IDs
+        - name: isPremium
+          in: query
+          schema:
+            type: boolean
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending_review, approved, rejected]
+        - name: minPrice
+          in: query
+          schema:
+            type: number
+        - name: maxPrice
+          in: query
+          schema:
+            type: number
+        - name: author
+          in: query
+          schema:
+            type: string
+        - name: sort
+          in: query
+          schema:
+            type: string
+            example: '-createdAt'
+      responses:
+        '200':
+          description: Assets retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Asset'
+                      meta:
+                        type: object
+                        properties:
+                          total:
+                            type: integer
+                          page:
+                            type: integer
+                          limit:
+                            type: integer
+                          totalPages:
+                            type: integer
+                          hasMore:
+                            type: boolean
+
+  /assets/{id}:
+    get:
+      tags:
+        - Assets
+      summary: Get asset by ID
+      description: Get single asset with full details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Asset retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Asset'
+
+    patch:
+      tags:
+        - Assets
+      summary: Update asset
+      description: Update asset status (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [pending_review, approved, rejected]
+      responses:
+        '200':
+          description: Asset updated successfully
+
+  # ==================== SUBSCRIPTIONS ====================
+  /subscriptions/checkout:
+    post:
+      tags:
+        - Subscriptions
+      summary: Create subscription checkout
+      description: Create Stripe checkout session for subscription
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - planId
+              properties:
+                planId:
+                  type: string
+                successUrl:
+                  type: string
+                cancelUrl:
+                  type: string
+      responses:
+        '200':
+          description: Checkout session created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sessionId:
+                    type: string
+                  url:
+                    type: string
+
+  /subscriptions/checkout/verify:
+    post:
+      tags:
+        - Subscriptions
+      summary: Verify checkout session
+      description: Verify subscription checkout session after payment
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - sessionId
+              properties:
+                sessionId:
+                  type: string
+      responses:
+        '200':
+          description: Subscription verified successfully
+
+  /subscriptions:
+    post:
+      tags:
+        - Subscriptions
+      summary: Create subscription
+      description: Create subscription manually (Admin only)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - userId
+                - planId
+              properties:
+                userId:
+                  type: string
+                planId:
+                  type: string
+      responses:
+        '201':
+          description: Subscription created
+
+    get:
+      tags:
+        - Subscriptions
+      summary: Get all subscriptions
+      description: Get all subscriptions (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Subscriptions retrieved successfully
+
+  /subscriptions/{id}:
+    get:
+      tags:
+        - Subscriptions
+      summary: Get subscription by ID
+      description: Get single subscription (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Subscription retrieved
+
+    patch:
+      tags:
+        - Subscriptions
+      summary: Update subscription
+      description: Update subscription (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [active, canceled, past_due, expired]
+      responses:
+        '200':
+          description: Subscription updated
+
+  # ==================== INDIVIDUAL PAYMENTS ====================
+  /individual-payments/create-checkout-session:
+    post:
+      tags:
+        - Individual Payments
+      summary: Create payment checkout
+      description: Create Stripe checkout for individual asset purchase
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - assetId
+              properties:
+                assetId:
+                  type: string
+                successUrl:
+                  type: string
+                cancelUrl:
+                  type: string
+      responses:
+        '200':
+          description: Checkout session created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sessionId:
+                    type: string
+                  url:
+                    type: string
+
+  /individual-payments/verify-session:
+    post:
+      tags:
+        - Individual Payments
+      summary: Verify payment session
+      description: Verify payment checkout session
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - sessionId
+              properties:
+                sessionId:
+                  type: string
+      responses:
+        '200':
+          description: Payment verified successfully
+
+  /individual-payments/payment-history:
+    get:
+      tags:
+        - Individual Payments
+      summary: Get payment history
+      description: Get user's payment history
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: paymentStatus
+          in: query
+          schema:
+            type: string
+            enum: [pending, completed, failed, refunded]
+      responses:
+        '200':
+          description: Payment history retrieved
+
+  /individual-payments/check/{assetId}:
+    get:
+      tags:
+        - Individual Payments
+      summary: Check asset purchase
+      description: Check if user has purchased a specific asset
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Purchase status retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  isPurchased:
+                    type: boolean
+                  payment:
+                    oneOf:
+                      - $ref: '#/components/schemas/IndividualPayment'
+                      - type: object
+                        nullable: true
+
+  # ==================== ASSET STATS ====================
+  /asset-stats/view:
+    post:
+      tags:
+        - Asset Stats
+      summary: Increment view count
+      description: Record an asset view (public endpoint)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - assetId
+              properties:
+                assetId:
+                  type: string
+      responses:
+        '200':
+          description: View recorded
+
+  /asset-stats/like:
+    post:
+      tags:
+        - Asset Stats
+      summary: Like/Unlike asset
+      description: Toggle like status for asset
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - assetId
+              properties:
+                assetId:
+                  type: string
+      responses:
+        '200':
+          description: Like status updated
+
+  /asset-stats/download:
+    post:
+      tags:
+        - Asset Stats
+      summary: Record download
+      description: Record asset download
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - assetId
+              properties:
+                assetId:
+                  type: string
+      responses:
+        '200':
+          description: Download recorded
+
+  /asset-stats/{assetId}:
+    get:
+      tags:
+        - Asset Stats
+      summary: Get asset stats
+      description: Get statistics for an asset
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Stats retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  views:
+                    type: integer
+                  downloads:
+                    type: integer
+                  likes:
+                    type: integer
+
+  /asset-stats/{assetId}/detailed:
+    get:
+      tags:
+        - Asset Stats
+      summary: Get detailed stats
+      description: Get detailed asset statistics with user data (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Detailed stats retrieved
+
+  # ==================== REVIEWS ====================
+  /reviews/asset/{assetId}:
+    get:
+      tags:
+        - Reviews
+      summary: Get reviews by asset
+      description: Get all reviews for a specific asset
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Reviews retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Review'
+                  meta:
+                    type: object
+
+  /reviews/{reviewId}:
+    get:
+      tags:
+        - Reviews
+      summary: Get review by ID
+      description: Get single review
+      parameters:
+        - name: reviewId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Review retrieved
+
+    delete:
+      tags:
+        - Reviews
+      summary: Delete review
+      description: Delete review (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: reviewId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Review deleted
+
+  /reviews:
+    post:
+      tags:
+        - Reviews
+      summary: Create review
+      description: Create review (only paid subscribers or asset downloaders)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - assetId
+                - rating
+                - comment
+              properties:
+                assetId:
+                  type: string
+                rating:
+                  type: integer
+                  minimum: 1
+                  maximum: 5
+                comment:
+                  type: string
+      responses:
+        '201':
+          description: Review created
+
+  /reviews/{reviewId}/reply:
+    post:
+      tags:
+        - Reviews
+      summary: Reply to review
+      description: Author reply to review (asset author only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: reviewId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - reply
+              properties:
+                reply:
+                  type: string
+      responses:
+        '200':
+          description: Reply added
+
+  # ==================== CONTACT ====================
+  /contacts/stats/overview:
+    get:
+      tags:
+        - Contact
+      summary: Get contact statistics
+      description: Get overview statistics (Admin only)
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Statistics retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                  open:
+                    type: integer
+                  inProgress:
+                    type: integer
+                  resolved:
+                    type: integer
+                  closed:
+                    type: integer
+
+  /contacts:
+    get:
+      tags:
+        - Contact
+      summary: Get contacts
+      description: Get contacts (own for users, all for admins)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [open, in_progress, resolved, closed]
+        - name: category
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Contacts retrieved
+
+    post:
+      tags:
+        - Contact
+      summary: Create contact
+      description: Create new contact message (Subscriber/Author only)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - subject
+                - message
+              properties:
+                subject:
+                  type: string
+                category:
+                  type: string
+                  enum: [general, technical, billing, content, other]
+                priority:
+                  type: string
+                  enum: [low, medium, high, urgent]
+                message:
+                  type: string
+      responses:
+        '201':
+          description: Contact created
+
+  /contacts/{contactId}:
+    get:
+      tags:
+        - Contact
+      summary: Get contact by ID
+      description: Get single contact message
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: contactId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Contact retrieved
+
+    delete:
+      tags:
+        - Contact
+      summary: Delete contact
+      description: Delete contact (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: contactId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Contact deleted
+
+  /contacts/{contactId}/reply:
+    post:
+      tags:
+        - Contact
+      summary: Reply to contact
+      description: Admin reply to contact with email notification
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: contactId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - reply
+              properties:
+                reply:
+                  type: string
+      responses:
+        '200':
+          description: Reply sent
+
+  /contacts/{contactId}/status:
+    patch:
+      tags:
+        - Contact
+      summary: Update contact status
+      description: Update contact status (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: contactId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: string
+                  enum: [open, in_progress, resolved, closed]
+      responses:
+        '200':
+          description: Status updated
+
+  # ==================== DASHBOARD ====================
+  /dashboard/author:
+    get:
+      tags:
+        - Dashboard
+      summary: Get author analytics
+      description: Get analytics for author (views, downloads, earnings)
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Analytics retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  views:
+                    type: object
+                    properties:
+                      lifetime:
+                        type: integer
+                      today:
+                        type: integer
+                      yesterday:
+                        type: integer
+                      thisWeek:
+                        type: integer
+                      thisMonth:
+                        type: integer
+                      thisYear:
+                        type: integer
+                  downloads:
+                    type: object
+                    properties:
+                      lifetime:
+                        type: integer
+                      today:
+                        type: integer
+                      yesterday:
+                        type: integer
+                      thisWeek:
+                        type: integer
+                      thisMonth:
+                        type: integer
+                      thisYear:
+                        type: integer
+                  earnings:
+                    type: object
+                    properties:
+                      lifetime:
+                        type: number
+                      today:
+                        type: number
+                      yesterday:
+                        type: number
+                      thisWeek:
+                        type: number
+                      thisMonth:
+                        type: number
+                      thisYear:
+                        type: number
+                  topAssets:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        assetId:
+                          type: string
+                        title:
+                          type: string
+                        views:
+                          type: integer
+                        downloads:
+                          type: integer
+                        earnings:
+                          type: number
+
+  /dashboard/admin:
+    get:
+      tags:
+        - Dashboard
+      summary: Get admin analytics
+      description: Get platform-wide analytics (Admin only)
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Analytics retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  views:
+                    type: object
+                  downloads:
+                    type: object
+                  earnings:
+                    type: object
+                    properties:
+                      total:
+                        type: object
+                      company:
+                        type: object
+                      authors:
+                        type: object
+                  users:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                      subscribers:
+                        type: integer
+                      authors:
+                        type: integer
+                      premium:
+                        type: integer
+                  assets:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                      pending:
+                        type: integer
+                      approved:
+                        type: integer
+                      rejected:
+                        type: integer
+
+  /dashboard/backfill-earnings:
+    post:
+      tags:
+        - Dashboard
+      summary: Backfill earnings
+      description: Sync totalEarnings from existing payment data (Admin only, run once)
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Earnings backfilled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  updated:
+                    type: integer
+
+  # ==================== STRIPE ====================
+  /stripe/webhook:
+    post:
+      tags:
+        - Stripe
+      summary: Stripe webhook handler
+      description: Handle Stripe webhook events (checkout.session.completed, customer.subscription.*)
+      parameters:
+        - name: stripe-signature
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Webhook processed
+        '400':
+          description: Invalid signature
