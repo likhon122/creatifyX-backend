@@ -1,0 +1,14 @@
+node_modules
+.env
+.git
+uploads
+dist
+*.log
+.prettierrc.json
+.eslintignore
+.gitignore
+postman
+TESTING_GUIDE.md
+swagger.json
+swagger.yaml
+documentation.yaml

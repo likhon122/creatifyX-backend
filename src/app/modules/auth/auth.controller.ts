@@ -60,17 +60,7 @@ const login = catchAsync(async (req, res) => {
     });
   }
 
-  if (result.otp) {
-    return successResponse(res, {
-      success: true,
-      message:
-        'Please verify the OTP sent to your email to complete the login process. The OTP will expire in 5 minutes.',
-      statusCode: httpStatus.OK,
-      data: {
-        otp: result.otp,
-      },
-    });
-  } else {
+  if (result.user) {
     return successResponse(res, {
       success: true,
       message: 'Login successful!',
@@ -79,6 +69,14 @@ const login = catchAsync(async (req, res) => {
         userInfo: result.user,
         accessToken: result.accessToken,
       },
+    });
+  } else {
+    return successResponse(res, {
+      success: true,
+      message:
+        'Please verify the OTP sent to your email to complete the login process. The OTP will expire in 5 minutes.',
+      statusCode: httpStatus.OK,
+      data: {},
     });
   }
 });

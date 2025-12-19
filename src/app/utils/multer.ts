@@ -3,8 +3,12 @@ import path from 'path';
 import fs from 'fs';
 import { Request } from 'express';
 
-const uploadDir = path.join(process.cwd(), 'uploads');
+// Use /tmp directory for serverless environments like Vercel
+const uploadDir = process.env.VERCEL
+  ? path.join('/tmp', 'uploads')
+  : path.join(process.cwd(), 'uploads');
 
+// Ensure upload directory exists
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
