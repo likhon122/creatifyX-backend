@@ -6,6 +6,7 @@ import router from './app/routes';
 import notFoundErrorHandler from './app/middlewares/notFoundErrorHandler';
 import globalErrorHandler from './app/middlewares/globalErrorHandler';
 import stripeRoutes from './app/modules/stripe/stripe.routes';
+import connectDB from './app/db/db';
 
 const app = express();
 
@@ -22,6 +23,20 @@ app.use('/api/v1/stripe', stripeRoutes);
 app.use(express.json());
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
+
+// Database connection verification middleware
+app.use(async (req, res, next) => {
+  // Allow OPTIONS preflight requests to succeed fast without DB check
+  if (req.method === 'OPTIONS') {
+    return next();
+  }
+  try {
+    await connectDB();
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
 
 // All Routes are here
 app.use('/api/v1', router);

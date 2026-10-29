@@ -122,7 +122,9 @@ const updatePlanHandler = async (id: string, payload: TUpdatePlanPayload) => {
 };
 
 const getAllPlansHandler = async () => {
-  const plans = await Plan.find().select('-createdAt -updatedAt -__v');
+  const plans = await Plan.find({ isActive: true })
+    .lean()
+    .select('-createdAt -updatedAt -__v');
   return plans;
 };
 

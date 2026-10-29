@@ -5,7 +5,10 @@ dotenv.config();
 const port = process.env.PORT || 3000;
 const envMode = process.env.ENV_MODE || 'development';
 const mongoUrl =
-  process.env.MONGODB_URI || 'mongodb://localhost:27017/default_db';
+  process.env.MONGODB_URI ||
+  (process.env.NODE_ENV === 'production' || process.env.VERCEL === '1'
+    ? ''
+    : 'mongodb://localhost:27017/default_db');
 const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY || '';
 const stripeSuccessUrl =

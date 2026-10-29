@@ -29,6 +29,7 @@ const assetSchema = new Schema<TAsset>(
         assetStatus.rejected,
       ],
       default: assetStatus.pending_review,
+      index: true,
     },
 
     storage: {
@@ -122,5 +123,11 @@ const assetSchema = new Schema<TAsset>(
   },
   { timestamps: true }
 );
+
+// High-performance compound indexes for search, status filtering, and sorting
+assetSchema.index({ status: 1, createdAt: -1 });
+assetSchema.index({ status: 1, assetType: 1, createdAt: -1 });
+assetSchema.index({ author: 1, status: 1 });
+assetSchema.index({ categories: 1, status: 1, createdAt: -1 });
 
 export const Asset = model<TAsset>('Asset', assetSchema);

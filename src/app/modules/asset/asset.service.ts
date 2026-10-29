@@ -544,31 +544,84 @@ const getAllAssetsHandler = async (params: Record<string, unknown> = {}) => {
         },
       };
 
-  const dataPipeline: PipelineStage[] = [...postMatchStages, sanitizeStage];
-  const metaPipeline: PipelineStage[] = [{ $count: 'total' }];
+  // Determine if any active filter requires metadata or stats join during match
+  const hasMetadataOrStatsFilter = Boolean(
+    (params.search && String(params.search).trim()) ||
+    (params.searchTerm && String(params.searchTerm).trim()) ||
+    (params.q && String(params.q).trim()) ||
+    params.keywords ||
+    params.keyword ||
+    params.colors ||
+    params.minDownloads !== undefined ||
+    params.maxDownloads !== undefined ||
+    params.minViews !== undefined ||
+    params.maxViews !== undefined ||
+    params.minLikes !== undefined ||
+    params.maxLikes !== undefined ||
+    params.minDuration !== undefined ||
+    params.maxDuration !== undefined
+  );
 
-  const facetStage: PipelineStage = {
-    $facet: {
-      data: dataPipeline,
-      meta: metaPipeline,
-    } as Record<string, PipelineStage[]>,
-  } as unknown as PipelineStage;
+  let facetPipeline: PipelineStage[];
 
-  const addFieldsStage: PipelineStage = {
-    $addFields: {
-      meta: {
-        $ifNull: [{ $arrayElemAt: ['$meta', 0] }, { total: 0 }],
+  if (!hasMetadataOrStatsFilter) {
+    // ULTRA-FAST PATH (95%+ of requests):
+    // 1. Filter status and asset criteria FIRST directly on indexed fields
+    // 2. Facet computes total count instantly without any lookups
+    // 3. Only look up metadata, categories and stats for the paginated slice (e.g. 12 items)
+    const fastDataPipeline: PipelineStage[] = [
+      ...postMatchStages,
+      ...lookupStages,
+      sanitizeStage,
+    ];
+    const fastMetaPipeline: PipelineStage[] = [{ $count: 'total' }];
+
+    const fastFacetStage: PipelineStage = {
+      $facet: {
+        data: fastDataPipeline,
+        meta: fastMetaPipeline,
+      } as Record<string, PipelineStage[]>,
+    } as unknown as PipelineStage;
+
+    facetPipeline = [
+      ...(statusFilterStage ? [statusFilterStage] : []),
+      ...(matchStage ? [matchStage] : []),
+      fastFacetStage,
+      {
+        $addFields: {
+          meta: {
+            $ifNull: [{ $arrayElemAt: ['$meta', 0] }, { total: 0 }],
+          },
+        },
       },
-    },
-  };
+    ];
+  } else {
+    // METADATA FILTER PATH:
+    // Filter status FIRST before lookups to minimize collection scan
+    const dataPipeline: PipelineStage[] = [...postMatchStages, sanitizeStage];
+    const metaPipeline: PipelineStage[] = [{ $count: 'total' }];
 
-  const facetPipeline: PipelineStage[] = [
-    ...lookupStages,
-    ...(statusFilterStage ? [statusFilterStage] : []), // Only add status filter if needed
-    ...(matchStage ? [matchStage] : []),
-    facetStage,
-    addFieldsStage,
-  ];
+    const facetStage: PipelineStage = {
+      $facet: {
+        data: dataPipeline,
+        meta: metaPipeline,
+      } as Record<string, PipelineStage[]>,
+    } as unknown as PipelineStage;
+
+    facetPipeline = [
+      ...(statusFilterStage ? [statusFilterStage] : []),
+      ...lookupStages,
+      ...(matchStage ? [matchStage] : []),
+      facetStage,
+      {
+        $addFields: {
+          meta: {
+            $ifNull: [{ $arrayElemAt: ['$meta', 0] }, { total: 0 }],
+          },
+        },
+      },
+    ];
+  }
 
   const aggregated = await Asset.aggregate(facetPipeline);
   const facetResult = aggregated[0] ?? { data: [], meta: { total: 0 } };
