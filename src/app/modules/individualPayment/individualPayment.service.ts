@@ -66,6 +66,22 @@ const createCheckoutSessionHandler = async (
     throw new AppError(httpStatus.NOT_FOUND, 'User not found');
   }
 
+  // Only subscribers can purchase assets
+  if (user.role !== 'subscriber') {
+    throw new AppError(
+      httpStatus.FORBIDDEN,
+      'Only subscribers can make a purchase transaction. Administrators and authors cannot purchase assets. Please use a subscriber account to purchase.'
+    );
+  }
+
+  // Check if author is trying to purchase their own asset
+  if (asset.author && asset.author.toString() === userId) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      'You cannot purchase your own asset.'
+    );
+  }
+
   // Check if user already purchased this asset
   const existingPayment = await IndividualPayment.findOne({
     user: userId,

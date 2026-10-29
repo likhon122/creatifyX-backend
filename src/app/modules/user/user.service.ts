@@ -76,6 +76,7 @@ const getAllUsersHandler = async (params: Record<string, unknown> = {}) => {
       'resetPasswordExpires',
       'passwordResetToken',
       'passwordResetExpires',
+      'passwordChangedAt',
       'passwordResetIp',
       'loginOtp',
       'loginOtpExpires',

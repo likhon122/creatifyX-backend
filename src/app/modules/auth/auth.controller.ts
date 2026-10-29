@@ -156,13 +156,14 @@ const getRefreshToken = catchAsync(async (req, res) => {
 
 const forgotPassword = catchAsync(async (req, res) => {
   // Call the service to handle forgot password logic
-  const result = await forgotPasswordHandler(req.body.email);
+  await forgotPasswordHandler(req.body.email);
 
   successResponse(res, {
     success: true,
-    message: 'Password reset link sent to your! Please check your email.',
-    statusCode: 200,
-    data: { result },
+    message:
+      'If an account with that email exists, we have sent a password reset link. Please check your email.',
+    statusCode: httpStatus.OK,
+    data: {},
   });
 });
 
@@ -172,8 +173,9 @@ const resetPassword = catchAsync(async (req, res) => {
 
   successResponse(res, {
     success: true,
-    message: 'Password reset successfully',
-    statusCode: 200,
+    message:
+      'Password reset successfully. You can now log in with your new password.',
+    statusCode: httpStatus.OK,
     data: {},
   });
 });

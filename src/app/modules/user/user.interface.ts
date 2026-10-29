@@ -25,8 +25,9 @@ export type TUser = {
   totalEarnings: number;
   isDeleted: boolean;
   passwordResetIp?: string;
-  passwordResetToken?: string;
-  passwordResetExpires?: Date;
+  passwordResetToken?: string | null;
+  passwordResetExpires?: Date | null;
+  passwordChangedAt?: Date | null;
   loginOtp?: number;
   loginOtpExpires?: Date;
 };
@@ -35,7 +36,7 @@ export interface UserModelType extends Model<TUser> {
   isUserExistByCustomId(id: string): Promise<TUser>;
   hashPassword(password: string): Promise<string>;
   isJwtIssuedBeforePasswordChange(
-    passwordResetExpires: Date,
+    passwordChangedAt: Date,
     jwtIssuedAt: number
   ): boolean;
 }

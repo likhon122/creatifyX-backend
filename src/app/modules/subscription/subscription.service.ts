@@ -43,6 +43,14 @@ const createCheckoutSessionHandler = async (
   // Validate user by userId
   const user = await findUserByIdOrThrow(userId);
 
+  // Only subscribers can purchase subscriptions
+  if (user.role !== 'subscriber') {
+    throw new AppError(
+      httpStatus.FORBIDDEN,
+      'Only subscribers can purchase subscription plans. Administrators and authors cannot make subscription transactions. Please use a subscriber account to subscribe.'
+    );
+  }
+
   // Check user subscription limit
   await ensureUserSubscriptionLimit(userId);
 
@@ -352,6 +360,7 @@ const getAllSubscriptionsHandler = async (
               resetPasswordExpires: 0,
               passwordResetToken: 0,
               passwordResetExpires: 0,
+              passwordChangedAt: 0,
               passwordResetIp: 0,
               loginOtp: 0,
               loginOtpExpires: 0,

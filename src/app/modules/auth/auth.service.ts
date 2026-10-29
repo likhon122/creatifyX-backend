@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import jwt, { JwtPayload } from 'jsonwebtoken';
 import httpStatus from '../../constant/httpStatus';
 import AppError from '../../errors/appError';
@@ -11,6 +12,10 @@ import {
   refreshTokenExpiresIn,
 } from '../../config';
 import sendEmail from '../../utils/sendEmail';
+import {
+  passwordResetEmailTemplate,
+  passwordResetSuccessEmailTemplate,
+} from '../../utils/email/passwordResetEmail';
 import { userRoles } from '../user/user.constant';
 import createJwtToken from '../../utils/createJwtToken';
 import isPasswordMatched from '../../utils/isPasswordMatched';
@@ -37,11 +42,19 @@ const signupHandler = async (payload: TUser) => {
     to: payload.email,
     subject: 'Verify your email',
     message: 'Please verify your email by clicking the link below.',
-    html: `<p>Click <a href="${frontendUrl}/verify-email?token=${userJwtToken}">here</a> to verify your email. This link will expire in 5 minutes.</p>`,
+    html: `<p>Click <a href="${frontendUrl}/auth/verify-email?token=${userJwtToken}">here</a> to verify your email. This link will expire in 5 minutes.</p>`,
   };
 
   // Send verification email
-  sendEmail(mailBody);
+  try {
+    await sendEmail(mailBody);
+  } catch (emailError: any) {
+    console.warn(
+      '⚠️ Failed to send verification email:',
+      emailError?.message || emailError
+    );
+  }
+
   return envMode === 'development'
     ? {
         token: envMode === 'development' ? userJwtToken : '',
@@ -82,7 +95,15 @@ const registerUserHandler = async (payload: { token: string }) => {
     message: 'We are excited to have you on board.',
     html: `<p>Hi ${name},</p><p>Welcome to our platform! We're thrilled to have you with us.</p>`,
   };
-  sendEmail(mailBody);
+  try {
+    await sendEmail(mailBody);
+  } catch (emailError: any) {
+    console.warn(
+      '⚠️ Failed to send welcome email:',
+      emailError?.message || emailError
+    );
+  }
+
   // Generate a default profile image using gravatar
   const userData = {
     name,
@@ -154,12 +175,8 @@ const loginHandler = async (payload: { email: string; password: string }) => {
     throw new AppError(httpStatus.BAD_REQUEST, 'Invalid email or password!');
   }
 
-  // Send a verification email if the user is an author
-  if (
-    user.role === userRoles.author ||
-    user.role === userRoles.admin ||
-    user.role === userRoles.super_admin
-  ) {
+  // Send a verification email if the user is an author (super admin and admin log in directly)
+  if (user.role === userRoles.author) {
     // Generate 6 digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     // Generate otpExpiry time 5 minutes from now
@@ -171,7 +188,14 @@ const loginHandler = async (payload: { email: string; password: string }) => {
       html: `<p>Your OTP for login is: <strong>${otp}</strong>. This OTP will expire in 5 minutes.</p>`,
     };
     // Send verification email
-    sendEmail(mailBody);
+    try {
+      await sendEmail(mailBody);
+    } catch (emailError: any) {
+      console.warn(
+        '⚠️ Failed to send login OTP email:',
+        emailError?.message || emailError
+      );
+    }
 
     const updateOtp = await User.findByIdAndUpdate(
       user._id,
@@ -340,14 +364,15 @@ const changePasswordHandler = async (
   // Hash the new password
   const hashedNewPassword = await User.hashPassword(payload.newPassword);
 
-  // Update the password
+  // Update the password and invalidate any existing reset tokens
   const updatedUser = await User.findOneAndUpdate(
     { _id: user._id },
     {
       password: hashedNewPassword,
-      passwordResetExpires: new Date(),
+      passwordChangedAt: new Date(),
+      passwordResetExpires: null,
+      passwordResetToken: null,
       passwordResetIp: ipAddress,
-      passwordResetToken: accessToken,
     },
     { new: true, runValidators: true }
   );
@@ -404,10 +429,10 @@ const getRefreshTokenHandler = async (payload: { refreshToken: string }) => {
     );
   }
 
-  // Now check if the user change password then we will check The jwt token time is less than the password change time
-  if (user.passwordResetExpires || user.passwordResetToken) {
+  // Check if the user changed password; if token was issued before change, invalidate it
+  if (user.passwordChangedAt) {
     const isJwtIssuedBeforePassChange = User.isJwtIssuedBeforePasswordChange(
-      user.passwordResetExpires as Date,
+      user.passwordChangedAt as Date,
       isValidToken.iat as number
     );
 
@@ -435,82 +460,148 @@ const getRefreshTokenHandler = async (payload: { refreshToken: string }) => {
 };
 
 const forgotPasswordHandler = async (email: string) => {
-  // Check if the user exists in the database
-  const user = await User.findOne({ email }).select('+password');
-
-  if (!user) {
-    throw new AppError(httpStatus.NOT_FOUND, 'User not found with this email!');
+  if (!email) {
+    return;
   }
 
-  // Check If the user is deleted or blocked
-  if (user.isDeleted) {
-    throw new AppError(
-      httpStatus.UNAUTHORIZED,
-      `This ${user.role} is already deleted! Please contact the customer support.`
-    );
-  } else if (user.status === 'blocked') {
-    throw new AppError(
-      httpStatus.UNAUTHORIZED,
-      `This ${user.role} is blocked! Please contact the customer support.`
-    );
+  // Normalize email to lowercase and trim
+  const normalizedEmail = email.toLowerCase().trim();
+
+  // Find user by email
+  const user = await User.findOne({ email: normalizedEmail });
+
+  // Security (Account Enumeration Prevention): If user does not exist or is inactive,
+  // do not throw 404 or disclose existence; return silently.
+  if (!user || user.isDeleted || user.status === 'blocked') {
+    return;
   }
 
-  // Generate a password reset token
-  const resetToken = createJwtToken(
-    { userId: user._id.toString(), role: user.role },
-    jwtSecretKey as string,
-    '5m'
-  );
+  // Generate cryptographically secure random token (32 bytes = 64 hex characters)
+  const rawResetToken = crypto.randomBytes(32).toString('hex');
 
-  // Generate the reset password URL
-  const resetPasswordUrl = `${frontendUrl}/reset-password?email=${user.email}&token=${resetToken}`;
+  // Hash the token with SHA-256 before persisting in the database
+  const hashedResetToken = crypto
+    .createHash('sha256')
+    .update(rawResetToken)
+    .digest('hex');
 
-  // sent email to the user with nodemailer
-  const mailBody = {
-    to: user.email,
-    subject: 'Password Reset Link',
-    message: `Click on the link to reset your password: ${resetPasswordUrl}`,
-    html: `<p>Click on the link to reset your password: <a href="${resetPasswordUrl}">Reset Password</a></p>`,
-  };
-  await sendEmail(mailBody);
-  return resetPasswordUrl;
+  // Token expires in 10 minutes
+  const resetExpires = new Date(Date.now() + 10 * 60 * 1000);
+
+  // Update user with the hashed token and expiry
+  await User.findByIdAndUpdate(user._id, {
+    passwordResetToken: hashedResetToken,
+    passwordResetExpires: resetExpires,
+  });
+
+  // Construct reset URL for the frontend
+  const resetPasswordUrl = `${frontendUrl}/auth/reset-password?token=${rawResetToken}&email=${encodeURIComponent(user.email)}`;
+
+  if (envMode === 'development') {
+    console.log('--- Development Password Reset Link ---');
+    console.log(resetPasswordUrl);
+    console.log('----------------------------------------');
+  }
+
+  // Send the reset email
+  try {
+    const mailBody = {
+      to: user.email,
+      subject: 'CreatifyX - Password Reset Request',
+      message: `Click on the link to reset your password: ${resetPasswordUrl}. This link will expire in 10 minutes.`,
+      html: passwordResetEmailTemplate(user.name, resetPasswordUrl),
+    };
+    await sendEmail(mailBody);
+  } catch (emailError: any) {
+    console.error(
+      '⚠️ Email delivery failed:',
+      emailError?.message || emailError
+    );
+
+    // In development mode, don't fail the entire reset request if local SMTP credentials are not configured or invalid.
+    // The developer/tester can use the console-printed link above.
+    if (envMode === 'development') {
+      console.warn(
+        '⚠️ [DEV MODE]: Continuing because ENV_MODE is development. Use the link logged above to test password reset.'
+      );
+      return;
+    }
+
+    // In production, clean up the token so the user can re-request and throw an error.
+    await User.findByIdAndUpdate(user._id, {
+      passwordResetToken: null,
+      passwordResetExpires: null,
+    });
+    throw new AppError(
+      httpStatus.INTERNAL_SERVER_ERROR,
+      'Failed to send password reset email. Please contact support or try again later.'
+    );
+  }
 };
 
 const resetPasswordHandler = async (
   payload: {
-    email: string;
-    newPassword: string;
     token: string;
+    newPassword: string;
+    email?: string;
   },
   ipAddress: string
 ) => {
   if (!payload.token) {
     throw new AppError(
-      httpStatus.UNAUTHORIZED,
-      'Your are unauthorized to reset your password!'
+      httpStatus.BAD_REQUEST,
+      'Reset token is required to reset your password!'
     );
   }
 
-  // Verify the token
-  const decoded = verifyJwtToken(payload.token, jwtSecretKey as string);
-
-  if (!decoded) {
-    throw new AppError(httpStatus.BAD_REQUEST, 'Invalid or expired token!');
+  if (!payload.newPassword || payload.newPassword.length < 6) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      'Password must be at least 6 characters long!'
+    );
   }
 
-  // Check if the user exists in the database
-  const user = await User.findOne({
-    email: payload.email,
-  });
+  // Hash the incoming raw token with SHA-256 to compare with database
+  const hashedToken = crypto
+    .createHash('sha256')
+    .update(payload.token)
+    .digest('hex');
+
+  // Look up user by hashed token and verify it has not expired
+  let user = await User.findOne({
+    passwordResetToken: hashedToken,
+    passwordResetExpires: { $gt: new Date() },
+  }).select('+password +passwordResetToken +passwordResetExpires');
+
+  // Fallback for transition: if not found by hash, check if legacy JWT was supplied
+  if (!user) {
+    try {
+      const decoded = verifyJwtToken(payload.token, jwtSecretKey as string);
+      if (decoded && decoded.userId) {
+        user = await User.findById(decoded.userId).select(
+          '+password +passwordResetToken +passwordResetExpires'
+        );
+      }
+    } catch {
+      // Not a valid JWT either
+    }
+  }
 
   if (!user) {
-    throw new AppError(httpStatus.NOT_FOUND, 'User not found with this ID');
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      'Invalid or expired password reset link. Please request a new one.'
+    );
   }
 
-  if (user._id.toString() !== decoded.userId) {
+  // If email was provided, verify it matches the user record
+  if (
+    payload.email &&
+    user.email.toLowerCase() !== payload.email.toLowerCase().trim()
+  ) {
     throw new AppError(
       httpStatus.UNAUTHORIZED,
-      'You are not authorized to reset this user password!'
+      'Token is not valid for the provided email address.'
     );
   }
 
@@ -518,26 +609,27 @@ const resetPasswordHandler = async (
   if (user.isDeleted) {
     throw new AppError(
       httpStatus.UNAUTHORIZED,
-      `This ${user.role} is already deleted! Please contact the customer support.`
+      `This account has been deleted! Please contact customer support.`
     );
   } else if (user.status === 'blocked') {
     throw new AppError(
       httpStatus.UNAUTHORIZED,
-      `This ${user.role} is blocked! Please contact the customer support.`
+      `This account is blocked! Please contact customer support.`
     );
   }
 
   // Hash the new password
   const hashedNewPassword = await User.hashPassword(payload.newPassword);
 
-  // Update the password
+  // Atomically update password, invalidate reset token, record passwordChangedAt timestamp
   const updatedUser = await User.findOneAndUpdate(
-    { _id: decoded.userId },
+    { _id: user._id },
     {
       password: hashedNewPassword,
-      passwordResetExpires: new Date(),
+      passwordChangedAt: new Date(),
+      passwordResetToken: null,
+      passwordResetExpires: null,
       passwordResetIp: ipAddress,
-      passwordResetToken: payload.token,
     },
     { new: true, runValidators: true }
   );
@@ -549,22 +641,21 @@ const resetPasswordHandler = async (
     );
   }
 
-  // Show a reset password success email with full details and ip and info and time of reset
-  const mailBody = {
-    to: updatedUser.email,
-    subject: 'Password Reset Success',
-    message: `Your password has been reset successfully!`,
-    html: `
-      <p>Your password has been reset successfully!</p>
-      <p>If you did not perform this action, please contact our support immediately.</p>
-      <p><strong>Details of the reset:</strong></p>
-      <ul>
-        <li><strong>IP Address:</strong> ${ipAddress}</li>
-        <li><strong>Time:</strong> ${new Date().toLocaleString()}</li>
-      </ul>
-      `,
-  };
-  await sendEmail(mailBody);
+  // Send a security alert email notifying the user of successful password reset
+  try {
+    const alertMailBody = {
+      to: updatedUser.email,
+      subject: 'CreatifyX - Password Reset Successful',
+      message: `Your password was successfully reset. IP: ${ipAddress}. If you did not perform this action, please contact support immediately.`,
+      html: passwordResetSuccessEmailTemplate(updatedUser.name, ipAddress),
+    };
+    await sendEmail(alertMailBody);
+  } catch (emailError: any) {
+    console.warn(
+      '⚠️ Failed to send password reset confirmation email:',
+      emailError?.message || emailError
+    );
+  }
 
   return;
 };

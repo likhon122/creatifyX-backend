@@ -82,6 +82,7 @@ const userSchema = new Schema<TUser, UserModelType>(
     passwordResetIp: { type: String, default: null, select: false },
     passwordResetToken: { type: String, default: null, select: false },
     passwordResetExpires: { type: Date, default: null, select: false },
+    passwordChangedAt: { type: Date, default: null, select: false },
     loginOtp: { type: Number, default: null, select: false },
     loginOtpExpires: { type: Date, default: null, select: false },
   },
@@ -118,7 +119,7 @@ userSchema.post('save', function (doc, next) {
 
 userSchema.statics.isUserExistByCustomId = async function (_id: string) {
   const user = await User.findById(_id).select(
-    '+password +passwordResetToken +passwordResetExpires'
+    '+password +passwordResetToken +passwordResetExpires +passwordChangedAt'
   );
   if (user) {
     return user;
@@ -135,10 +136,10 @@ userSchema.statics.hashPassword = async function (password: string) {
 };
 
 userSchema.statics.isJwtIssuedBeforePasswordChange = function (
-  passwordResetExpires: Date,
+  passwordChangedAt: Date,
   jwtIssuedAt: number
 ) {
-  const passwordChangeTime = new Date(passwordResetExpires).getTime() / 1000;
+  const passwordChangeTime = Math.floor(new Date(passwordChangedAt).getTime() / 1000);
   return passwordChangeTime > jwtIssuedAt;
 };
 

@@ -39,6 +39,12 @@ const auth = (...roles: TUserRole[]) => {
 
     // Check if the user has the required role
     if (roles?.length && !roles.includes(isValidToken.role)) {
+      if (roles.length === 1 && roles[0] === userRoles.subscriber) {
+        throw new AppError(
+          httpStatus.FORBIDDEN,
+          'Only subscribers can perform this purchase transaction. Administrators and authors cannot make purchases. Please use a subscriber account.'
+        );
+      }
       throw new AppError(
         httpStatus.FORBIDDEN,
         'You are not allowed to access this resource!'
@@ -103,10 +109,10 @@ const auth = (...roles: TUserRole[]) => {
       }
     }
 
-    // Now check if the user change password then we will check The jwt token time is less than the password change time
-    if (user.passwordResetExpires || user.passwordResetToken) {
+    // Check if the user changed password; if token was issued before the change, invalidate it
+    if (user.passwordChangedAt) {
       const isJwtIssuedBeforePassChange = User.isJwtIssuedBeforePasswordChange(
-        user.passwordResetExpires as Date,
+        user.passwordChangedAt as Date,
         isValidToken.iat as number
       );
 

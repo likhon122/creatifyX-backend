@@ -13,7 +13,7 @@ const signupSchemaValidation = z.object({
 
 const registerUserValidationSchema = z.object({
   body: z.object({
-    token: z.string().nonempty('Token is required to register user!'),
+    token: z.string().min(1, 'Token is required to register user!'),
   }),
 });
 
@@ -53,11 +53,12 @@ const forgotPasswordValidationSchema = z.object({
 
 const resetPasswordValidation = z.object({
   body: z.object({
-    email: z.string().email('Invalid email address'),
-    token: z.string().nonempty('Token is required to reset password!'),
+    token: z.string().min(1, 'Token is required to reset password!'),
     newPassword: z
       .string()
-      .min(6, 'Password must be at least 6 characters long!'),
+      .min(6, 'Password must be at least 6 characters long!')
+      .max(64, 'Password must be at most 64 characters long!'),
+    email: z.string().email('Invalid email address').optional(),
   }),
 });
 
