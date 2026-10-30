@@ -8,6 +8,7 @@
 [![Cloudinary](https://img.shields.io/badge/Cloudinary-Media%20Storage-darkblue?logo=cloudinary)](https://cloudinary.com/)
 [![Vercel](https://img.shields.io/badge/Vercel-Serverless%20Functions-black?logo=vercel)](https://vercel.com/)
 [![Security](https://img.shields.io/badge/Security-OWASP%20Compliant-red)](#authentication--security)
+[![Frontend Repository](https://img.shields.io/badge/Frontend%20App-likhon122%2FcreatifyX--frontend-blueviolet?logo=github)](https://github.com/likhon122/creatifyX-frontend.git)
 
 High-performance, enterprise-grade RESTful API engine powering the **CreatifyX** digital asset marketplace. Architected for both traditional containerized deployment (`Node.js/Express`) and serverless edge execution (`Vercel Serverless Functions`) with sub-50ms database queries, OWASP-compliant authentication, role-based access control (RBAC), and automated media processing.
 
