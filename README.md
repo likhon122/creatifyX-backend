@@ -236,15 +236,16 @@ The backend is configured with `@vercel/node` and native TypeScript handling:
 4. The deployment will automatically utilize `vercel.json` allocating **1024MB RAM** (2x vCPU) and a **60s maximum duration** window:
    ```json
    {
-     "version": 2,
+     "$schema": "https://openapi.vercel.sh/vercel.json",
      "functions": {
        "api/index.ts": {
          "maxDuration": 60,
          "memory": 1024
        }
      },
-     "routes": [
-       { "src": "/(.*)", "dest": "api/index.ts" }
+     "rewrites": [
+       { "source": "/(.*)", "destination": "/api" }
      ]
    }
    ```
+

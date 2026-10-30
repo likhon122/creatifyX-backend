@@ -4,13 +4,9 @@ import seedSuperAdmin from '../src/app/db/seedSuperAdmin';
 
 let isSeeded = false;
 
-// Export serverless handler for Vercel
-export default async function handler(req: any, res: any) {
-  try {
-    // 1. Ensure database is fully connected before processing any requests
-    await connectDB();
-
-    // 2. Run seed in the background once without blocking user requests
+// Trigger database connection and seed on container initialization
+connectDB()
+  .then(() => {
     if (!isSeeded) {
       seedSuperAdmin()
         .then(() => {
@@ -20,15 +16,10 @@ export default async function handler(req: any, res: any) {
           console.error('Super admin background seed failed:', err);
         });
     }
+  })
+  .catch(err => {
+    console.error('Initial DB warm-up error:', err);
+  });
 
-    // 3. Forward request to Express app
-    return app(req, res);
-  } catch (error) {
-    console.error('Vercel serverless function initialization failed:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to initialize database connection. Please check MongoDB connection string and network access.',
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-}
+// Export Express app directly as the serverless function
+export default app;
