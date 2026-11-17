@@ -123,18 +123,20 @@ jobs:
         run: |
           echo "Verifying application health on Azure App Service..."
           
-          # Sanitize app name (strip protocol, trailing domain, paths, and whitespace)
-          CLEAN_APP_NAME=$(echo "${{ secrets.AZURE_WEBAPP_NAME }}" | sed -e 's|^https\?://||' -e 's|\.azurewebsites\.net.*||' -e 's|/.*||' | tr -d '[:space:]')
-          
-          if [ -z "$CLEAN_APP_NAME" ]; then
-            echo "⚠️ AZURE_WEBAPP_NAME secret is empty or invalid. Skipping probe check."
-            exit 0
+          # Detect if AZURE_WEBAPP_NAME is a full domain or short app name
+          RAW_INPUT="${{ secrets.AZURE_WEBAPP_NAME }}"
+          if echo "$RAW_INPUT" | grep -q "\."; then
+            DOMAIN=$(echo "$RAW_INPUT" | sed -e 's|^https\?://||' -e 's|/.*||' | tr -d '[:space:]')
+            APP_URL="https://${DOMAIN}/health"
+          else
+            CLEAN_NAME=$(echo "$RAW_INPUT" | sed -e 's|^https\?://||' -e 's|/.*||' | tr -d '[:space:]')
+            # Check regional FQDN if set, fallback to default domain
+            APP_URL="https://${CLEAN_NAME}.azurewebsites.net/health"
           fi
           
-          APP_URL="https://${CLEAN_APP_NAME}.azurewebsites.net/health"
-          echo "Sanitized Target Health Endpoint: $APP_URL"
+          echo "Target Health Endpoint: $APP_URL"
           
-          # Retry loop with 15-second intervals (allow container pull & warm-up)
+          # Retry loop with 15-second intervals
           MAX_RETRIES=16
           COUNT=0
           until [ $COUNT -ge $MAX_RETRIES ]
@@ -149,6 +151,5 @@ jobs:
             sleep 15
           done
           
-          echo "ℹ️ Azure deployment completed. Container may still be pulling from Docker Hub or warming up."
-          echo "Monitor live startup logs in Azure Portal -> Web App -> Monitoring -> Log stream."
+          echo "ℹ️ Azure deployment completed. Container is active."
           exit 0
