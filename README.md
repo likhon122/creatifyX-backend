@@ -7,6 +7,10 @@
 [![Stripe](https://img.shields.io/badge/Stripe-Payments%20%26%20Subscriptions-blueviolet?logo=stripe)](https://stripe.com/)
 [![Cloudinary](https://img.shields.io/badge/Cloudinary-Media%20Storage-darkblue?logo=cloudinary)](https://cloudinary.com/)
 [![Vercel](https://img.shields.io/badge/Vercel-Serverless%20Functions-black?logo=vercel)](https://vercel.com/)
+[![Azure App Service](https://img.shields.io/badge/Azure-App%20Service%20Web%20App-0078D4?logo=microsoftazure)](https://azure.microsoft.com/)
+[![Docker Hub](https://img.shields.io/badge/Docker-Hub%20Registry-2496ED?logo=docker)](https://hub.docker.com/)
+[![Nginx](https://img.shields.io/badge/Nginx-Reverse%20Proxy-009639?logo=nginx)](https://nginx.org/)
+[![GitHub Actions](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2088FF?logo=githubactions)](https://github.com/features/actions)
 [![Security](https://img.shields.io/badge/Security-OWASP%20Compliant-red)](#authentication--security)
 [![Frontend Repository](https://img.shields.io/badge/Frontend%20App-likhon122%2FcreatifyX--frontend-blueviolet?logo=github)](https://github.com/likhon122/creatifyX-frontend.git)
 
@@ -28,6 +32,7 @@ High-performance, enterprise-grade RESTful API engine powering the **CreatifyX**
 - [Environment Variables](#environment-variables)
 - [Local Development](#local-development)
 - [Production Deployment (Vercel)](#production-deployment-vercel)
+- [Production Deployment (Azure App Service & Docker Hub)](#-production-deployment-azure-app-service--docker-hub)
 
 ---
 
@@ -249,4 +254,25 @@ The backend is configured with `@vercel/node` and native TypeScript handling:
      ]
    }
    ```
+
+---
+
+## 🐳 Production Deployment (Azure App Service & Docker Hub)
+
+The backend includes a production-grade containerization and CI/CD workflow engineered for **Microsoft Azure App Service Web App for Containers (Linux)**:
+
+### 1. Architectural Components
+- **Multi-Stage `Dockerfile`**: Uses Alpine Linux, non-root user (`nodejs:1001`), `dumb-init` signal handling, and `/health` probe.
+- **Nginx Reverse Proxy (`nginx/`)**: Production Nginx configuration with 100MB body size for digital asset/video uploads, rate limiting zones, gzip compression, and security headers.
+- **Docker Compose (`docker-compose.yml`)**: Local and staging multi-container test harness.
+- **GitHub Actions Workflow (`.github/workflows/deploy.yml`)**:
+  - Automatically runs quality checks (TypeScript compile & ESLint).
+  - Builds and tags container images (`latest` and `${git_sha}`).
+  - Pushes images to **Docker Hub**.
+  - Deploys updated container to **Azure App Service Web App**.
+  - Executes post-deployment live health verification loop.
+
+### 2. Quick Setup & Guide
+For a step-by-step walkthrough covering **Azure for Students ($100 Credit & B1/F1 tiers)**, Docker Hub Personal Access Tokens, and GitHub Secrets configuration, consult the dedicated guide:
+👉 **[Read the Complete Azure Student Deployment Guide](./AZURE_STUDENT_DEPLOYMENT_GUIDE.md)**
 

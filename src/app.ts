@@ -24,10 +24,20 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 
+// Liveness & Readiness health check probe for Azure App Service & Docker
+app.get(['/health', '/api/v1/health'], (_req, res) => {
+  res.status(200).json({
+    status: 'UP',
+    service: 'creatifyX-backend',
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // Database connection verification middleware
 app.use(async (req, res, next) => {
-  // Allow OPTIONS preflight requests to succeed fast without DB check
-  if (req.method === 'OPTIONS') {
+  // Allow OPTIONS preflight and health checks to succeed fast without DB check
+  if (req.method === 'OPTIONS' || req.path === '/health' || req.path === '/api/v1/health') {
     return next();
   }
   try {
